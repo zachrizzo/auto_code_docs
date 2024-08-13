@@ -9,13 +9,8 @@ const path = window.require('path');
 
 const Analyzer = () => {
     const [language, setLanguage] = useState('javascript');
-    const [results, setResults] = useState({
-        classes: [],
-        functions: [],
-        classNames: [],
-        functionNames: [],
-        relationships: {},
-    });
+    const [results, setResults] = useState({});
+
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
     const [watchingDir, setWatchingDir] = useState(null);
@@ -52,7 +47,8 @@ const Analyzer = () => {
 
         await walkDirectory(watchingDir);
         setResults(aggregatedResults);
-        console.log(aggregatedResults);
+
+        console.log("Aggregated Results:", aggregatedResults); // Debugging: Log results
     };
 
     const clear = () => {
@@ -68,9 +64,37 @@ const Analyzer = () => {
 
     const handleNodeClick = useCallback(async (nodeId) => {
         setSelectedNode(nodeId);
+
+        if (!results || !Object.keys(results).length) {
+            console.error("Results data is not properly loaded.");
+            setAIDescriptions((prev) => ({ ...prev, [nodeId]: "Failed to load descriptions." }));
+            return;
+        }
+
+        // Split the nodeId into file name and function/method name
+        const [fileName, entityName] = nodeId.split('-');
+
+        if (!results[fileName]) {
+            console.error(`File ${fileName} not found in results.`);
+            setAIDescriptions((prev) => ({ ...prev, [nodeId]: "File data not found." }));
+            return;
+        }
+
+        const fileResults = results[fileName];
+        let nodeData = null;
+
+        // Search for the entity in functions
+        nodeData = fileResults.functions.find(func => func.name === entityName);
+
+        if (!nodeData) {
+            console.error(`Node data not found for nodeId: ${nodeId}`);
+            setAIDescriptions((prev) => ({ ...prev, [nodeId]: "Node data not found." }));
+            return;
+        }
+
         if (!aiDescriptions[nodeId]) {
             try {
-                const description = await getAIDescription(nodeId, results.classes.concat(results.functions).find(node => node.name === nodeId).code);
+                const description = await getAIDescription(entityName, nodeData.code);
                 setAIDescriptions((prev) => ({ ...prev, [nodeId]: description }));
             } catch (error) {
                 console.error("Error fetching AI description:", error);
@@ -78,6 +102,8 @@ const Analyzer = () => {
             }
         }
     }, [aiDescriptions, results]);
+
+
 
     const handleSelectDirectory = async () => {
         const selectedDir = await ipcRenderer.invoke('select-directory');
