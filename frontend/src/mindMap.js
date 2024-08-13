@@ -116,24 +116,39 @@ function CodeFlowChart({ data, onNodeClick }) {
             });
 
             // Create edges for relationships (direct and indirect)
+            // Create edges for relationships (direct and indirect)
             ['directRelationships', 'indirectRelationships'].forEach((relationType) => {
                 Object.entries(fileData[relationType] || {}).forEach(([source, targets]) => {
                     targets.forEach(target => {
                         const sourceId = `${fileId}-${source}`;
                         let targetId = `${fileId}-${target}`;
 
-                        // Handle special cases
-                        if (target === 'this.history.push') {
-                            targetId = sourceId;
-                        } else if (target === 'Error' || target === 'console.log') {
-                            if (!initialNodes.some(node => node.id === targetId)) {
-                                const globalNode = createNode(targetId, target, 'global', startX + 2 * (nodeWidth + gridSize), startY);
-                                initialNodes.push(globalNode);
-                                startY = globalNode.position.y + nodeHeight + gridSize;
-                            }
+                        // Search across all files for the target if not found in the current file
+                        if (!initialNodes.some(node => node.id === targetId)) {
+                            Object.entries(data).forEach(([otherFileName, otherFileData]) => {
+                                if (otherFileName !== fileName) {
+                                    const otherFileId = otherFileName;
+                                    const otherTargetNode = otherFileData.functions.find(func => func.name === target);
+                                    if (otherTargetNode) {
+                                        targetId = `${otherFileId}-${target}`;
+                                        if (!initialNodes.some(node => node.id === targetId)) {
+                                            const targetNode = createNode(targetId, target, 'function', 0, initialNodes.length * 200);
+                                            initialNodes.push(targetNode);
+                                            initialEdges.push({
+                                                id: `${sourceId}-${relationType}-${targetId}`,
+                                                source: sourceId,
+                                                target: targetId,
+                                                type: 'bezier',
+                                                animated: relationType === 'indirectRelationships',
+                                                style: { stroke: relationType === 'directRelationships' ? directRelationshipColor : indirectRelationshipColor },
+                                            });
+                                        }
+                                    }
+                                }
+                            });
                         }
 
-                        if (sourceId && targetId) {
+                        if (sourceId && targetId && initialNodes.some(node => node.id === targetId)) {
                             initialEdges.push({
                                 id: `${sourceId}-${relationType}-${targetId}`,
                                 source: sourceId,
@@ -146,7 +161,9 @@ function CodeFlowChart({ data, onNodeClick }) {
                     });
                 });
             });
+
         });
+
 
         setNodes(initialNodes);
         setEdges(initialEdges);

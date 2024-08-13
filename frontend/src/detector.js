@@ -1,9 +1,10 @@
 import * as Parser from 'web-tree-sitter';
 let parsers = {};
+let globalResults = {}; // To store parsed results for all files
 
 export async function initializeParser() {
     await Parser.init({
-        locateFile(scriptName, scriptDirectory) {
+        locateFile(scriptName) {
             return scriptName;
         },
     });
@@ -35,18 +36,21 @@ export async function detectClassesAndFunctions(language, code, fileName) {
     };
 
     function analyzeMethodBody(methodNode, className, results) {
-        const functionCalls = methodNode.text.match(/\b(add|subtract|multiply|divide|random)\b/g) || [];
+        const functionCalls = methodNode.text.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
         const methodName = methodNode.childForFieldName('name')?.text || methodNode.parent?.childForFieldName('name')?.text;
 
         if (className && methodName) {
             functionCalls.forEach(call => {
+                const callName = call.trim().slice(0, -1); // Remove the opening parenthesis
                 if (!results.methodToFunctionRelationships[className]) {
                     results.methodToFunctionRelationships[className] = {};
                 }
                 if (!results.methodToFunctionRelationships[className][methodName]) {
                     results.methodToFunctionRelationships[className][methodName] = [];
                 }
-                results.methodToFunctionRelationships[className][methodName].push(call);
+                if (!results.methodToFunctionRelationships[className][methodName].includes(callName)) {
+                    results.methodToFunctionRelationships[className][methodName].push(callName);
+                }
             });
         }
     }
@@ -138,15 +142,31 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                 }
             } else if (type === 'require') {
                 const moduleName = node.childForFieldName('name')?.text;
-                if (moduleName) {
-                    results.imports[moduleName] = true;
+                const importName = node.parent?.childForFieldName('name')?.text; // Get the variable the module is assigned to
+                if (moduleName && importName) {
+                    results.imports[importName] = moduleName;
                 }
+            } else if (type === 'import_statement') {
+                const importSpecifiers = node.namedChildren.filter(child => child.type === 'import_specifier');
+                importSpecifiers.forEach(specifier => {
+                    const importedName = specifier.childForFieldName('name')?.text;
+                    const localName = specifier.childForFieldName('alias')?.text || importedName;
+                    if (importedName) {
+                        results.imports[localName] = importedName;
+                    }
+                });
             } else if (type === 'export_statement') {
                 const declaration = node.childForFieldName('declaration');
                 if (declaration) {
                     const exportedName = declaration.childForFieldName('name')?.text;
                     if (exportedName) {
                         results.exports[exportedName] = true;
+                    }
+                } else {
+                    // Handle default exports
+                    const defaultExport = node.childForFieldName('value');
+                    if (defaultExport) {
+                        results.exports['default'] = true;
                     }
                 }
             }
@@ -164,5 +184,72 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         delete results.exports;
     }
 
+    globalResults[fileName] = results; // Store the results globally
+
     return results;
+}
+
+export function resolveCrossFileDependencies() {
+    const resolvedResults = JSON.parse(JSON.stringify(globalResults)); // Clone the global results
+
+    // First pass: identify all exports
+    const allExports = {};
+    for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
+        if (fileResults.exports) {
+            for (const exportName of Object.keys(fileResults.exports)) {
+                allExports[exportName] = fileName;
+            }
+        }
+    }
+
+    // Second pass: resolve cross-file relationships
+    for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
+        fileResults.crossFileRelationships = {};
+
+        // Check all functions and methods for calls to exported functions
+        const checkForCalls = (entity, entityName, entityType) => {
+            const calls = entity.code.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
+            calls.forEach(call => {
+                const callName = call.trim().slice(0, -1); // Remove the opening parenthesis
+                if (allExports[callName] && allExports[callName] !== fileName) {
+                    if (!fileResults.crossFileRelationships[entityType]) {
+                        fileResults.crossFileRelationships[entityType] = {};
+                    }
+                    if (!fileResults.crossFileRelationships[entityType][entityName]) {
+                        fileResults.crossFileRelationships[entityType][entityName] = {};
+                    }
+                    fileResults.crossFileRelationships[entityType][entityName][callName] = allExports[callName];
+                }
+            });
+        };
+
+        // Check functions
+        fileResults.functions.forEach(func => {
+            checkForCalls(func, func.name, 'functions');
+        });
+
+        // Check methods in classes
+        fileResults.classes.forEach(cls => {
+            cls.methods.forEach(method => {
+                checkForCalls(method, method.name, `classes.${cls.name}.methods`);
+            });
+        });
+
+        // Also check indirect relationships
+        for (const [funcName, calls] of Object.entries(fileResults.indirectRelationships)) {
+            calls.forEach(call => {
+                if (allExports[call] && allExports[call] !== fileName) {
+                    if (!fileResults.crossFileRelationships.indirectRelationships) {
+                        fileResults.crossFileRelationships.indirectRelationships = {};
+                    }
+                    if (!fileResults.crossFileRelationships.indirectRelationships[funcName]) {
+                        fileResults.crossFileRelationships.indirectRelationships[funcName] = {};
+                    }
+                    fileResults.crossFileRelationships.indirectRelationships[funcName][call] = allExports[call];
+                }
+            });
+        }
+    }
+
+    return resolvedResults;
 }
