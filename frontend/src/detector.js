@@ -27,9 +27,29 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         fileName,
         classes: [],
         functions: [],
-        relationships: {},
+        directRelationships: {},
+        indirectRelationships: {},
         imports: {},
+        exports: {},
+        methodToFunctionRelationships: {}
     };
+
+    function analyzeMethodBody(methodNode, className, results) {
+        const functionCalls = methodNode.text.match(/\b(add|subtract|multiply|divide|random)\b/g) || [];
+        const methodName = methodNode.childForFieldName('name')?.text || methodNode.parent?.childForFieldName('name')?.text;
+
+        if (className && methodName) {
+            functionCalls.forEach(call => {
+                if (!results.methodToFunctionRelationships[className]) {
+                    results.methodToFunctionRelationships[className] = {};
+                }
+                if (!results.methodToFunctionRelationships[className][methodName]) {
+                    results.methodToFunctionRelationships[className][methodName] = [];
+                }
+                results.methodToFunctionRelationships[className][methodName].push(call);
+            });
+        }
+    }
 
     function traverse(cursor, parentName = null) {
         do {
@@ -47,10 +67,11 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                         code: node.text,
                         methods: [],
                     });
-                    results.relationships[className] = [];
+                    results.directRelationships[className] = [];
+                    results.indirectRelationships[className] = [];
                 }
-            } else if (type === 'method_definition' || type === 'function_declaration') {
-                const functionName = node.childForFieldName('name')?.text;
+            } else if (type === 'method_definition' || type === 'function_declaration' || type === 'function') {
+                const functionName = node.childForFieldName('name')?.text || node.parent?.childForFieldName('name')?.text;
                 if (functionName) {
                     currentName = functionName;
                     const functionInfo = {
@@ -59,26 +80,74 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                     };
                     if (parentName && results.classes.find(c => c.name === parentName)) {
                         results.classes.find(c => c.name === parentName).methods.push(functionInfo);
+                        results.directRelationships[parentName] = results.directRelationships[parentName] || [];
+                        results.directRelationships[parentName].push(functionName);
+                        analyzeMethodBody(node, parentName, results);
                     } else {
                         results.functions.push(functionInfo);
+                        analyzeMethodBody(node, null, results);
                     }
-                    if (parentName && results.relationships[parentName]) {
-                        results.relationships[parentName].push(functionName);
+                    results.indirectRelationships[functionName] = [];
+                }
+            } else if (type === 'variable_declarator') {
+                const variableName = node.childForFieldName('name')?.text;
+                const initNode = node.childForFieldName('value');
+
+                if (initNode && (initNode.type === 'arrow_function' || initNode.type === 'function')) {
+                    const functionInfo = {
+                        name: variableName,
+                        code: node.text,
+                    };
+                    currentName = variableName;
+
+                    if (parentName && results.classes.find(c => c.name === parentName)) {
+                        results.classes.find(c => c.name === parentName).methods.push(functionInfo);
+                        results.directRelationships[parentName] = results.directRelationships[parentName] || [];
+                        results.directRelationships[parentName].push(variableName);
+                        analyzeMethodBody(initNode, parentName, results);
+                    } else {
+                        results.functions.push(functionInfo);
+                        analyzeMethodBody(initNode, null, results);
+                    }
+                    results.indirectRelationships[variableName] = [];
+                }
+            } else if (type === 'call_expression') {
+                const callee = node.childForFieldName('function')?.text;
+                if (callee && parentName) {
+                    results.indirectRelationships[parentName] = results.indirectRelationships[parentName] || [];
+                    if (!results.indirectRelationships[parentName].includes(callee)) {
+                        if (!['push', 'pop', 'shift', 'unshift'].includes(callee)) {
+                            results.indirectRelationships[parentName].push(callee);
+                        }
+                    }
+                    const parentClass = results.classes.find(c => c.methods.some(m => m.name === parentName));
+                    if (parentClass) {
+                        results.indirectRelationships[parentClass.name] = results.indirectRelationships[parentClass.name] || [];
+                        if (!results.indirectRelationships[parentClass.name].includes(callee)) {
+                            results.indirectRelationships[parentClass.name].push(callee);
+                        }
                     }
                 }
-            } else if (type === 'import_statement') {
-                const importSource = node.childForFieldName('source')?.text?.replace(/['"]/g, '');
-                const importSpecifiers = node.childForFieldName('specifiers');
-                if (importSource && importSpecifiers) {
-                    results.imports[importSource] = [];
-                    importSpecifiers.children.forEach(specifier => {
-                        if (specifier.type === 'import_specifier') {
-                            const importedName = specifier.childForFieldName('name')?.text;
-                            if (importedName) {
-                                results.imports[importSource].push(importedName);
-                            }
-                        }
-                    });
+            } else if (type === 'new_expression') {
+                const className = node.childForFieldName('constructor')?.text;
+                if (className && parentName) {
+                    results.indirectRelationships[parentName] = results.indirectRelationships[parentName] || [];
+                    if (!results.indirectRelationships[parentName].includes(className)) {
+                        results.indirectRelationships[parentName].push(className);
+                    }
+                }
+            } else if (type === 'require') {
+                const moduleName = node.childForFieldName('name')?.text;
+                if (moduleName) {
+                    results.imports[moduleName] = true;
+                }
+            } else if (type === 'export_statement') {
+                const declaration = node.childForFieldName('declaration');
+                if (declaration) {
+                    const exportedName = declaration.childForFieldName('name')?.text;
+                    if (exportedName) {
+                        results.exports[exportedName] = true;
+                    }
                 }
             }
 
@@ -90,6 +159,10 @@ export async function detectClassesAndFunctions(language, code, fileName) {
     }
 
     traverse(cursor);
+
+    if (Object.keys(results.exports).length === 0) {
+        delete results.exports;
+    }
 
     return results;
 }

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ReactFlow,
     Background,
@@ -10,101 +10,156 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
+
+
+
 function CodeFlowChart({ data, onNodeClick }) {
     const fileNodeColor = '#FFA500';
     const classNodeColor = '#4CAF50';
     const functionNodeColor = '#2196F3';
     const methodNodeColor = '#9C27B0';
+    const globalNodeColor = '#FF0000';
+    const directRelationshipColor = '#000000';
+    const indirectRelationshipColor = '#888888';
 
-    const initialNodes = [];
-    const initialEdges = [];
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-    Object.entries(data).forEach(([fileName, fileData], fileIndex) => {
-        initialNodes.push({
-            id: fileName,
-            data: { label: fileName },
-            position: { x: fileIndex * 1200, y: 0 },
-            style: { backgroundColor: fileNodeColor, color: '#fff', width: 180 },
-        });
+    const generateFlowElements = useCallback(() => {
+        const initialNodes = [];
+        const initialEdges = [];
+        const grid = {};
+        const gridSize = 50; // Size of each grid cell
+        const nodeWidth = 180;
+        const nodeHeight = 100;
 
-        // Create class nodes
-        (fileData.classes || []).forEach((classObj, classIndex) => {
-            const classId = `${fileName}-${classObj.name}`;
-            initialNodes.push({
-                id: classId,
-                data: { label: classObj.name },
-                position: { x: fileIndex * 1200, y: 300 + classIndex * 750 },
-                style: { backgroundColor: classNodeColor, color: '#fff', width: 150 },
-            });
-            initialEdges.push({
-                id: `${fileName}-${classId}`,
-                source: fileName,
-                target: classId,
-                type: 'smoothstep',
-            });
-
-            // Create method nodes
-            (classObj.methods || []).forEach((method, methodIndex) => {
-                const methodId = `${classId}-${method.name}`;
-                initialNodes.push({
-                    id: methodId,
-                    data: { label: method.name },
-                    position: { x: fileIndex * 1200 + (methodIndex % 2) * 450, y: 600 + classIndex * 750 + Math.floor(methodIndex / 2) * 240 },
-                    style: { backgroundColor: methodNodeColor, color: '#fff', width: 120 },
-                });
-                initialEdges.push({
-                    id: `${classId}-${methodId}`,
-                    source: classId,
-                    target: methodId,
-                    type: 'smoothstep',
-                });
-            });
-        });
-
-        // Create function nodes
-        (fileData.functions || []).forEach((func, funcIndex) => {
-            const funcId = `${fileName}-${func.name}`;
-            initialNodes.push({
-                id: funcId,
-                data: { label: func.name },
-                position: { x: fileIndex * 1200 + (funcIndex % 2) * 450, y: 1050 + Math.floor(funcIndex / 2) * 240 },
-                style: { backgroundColor: functionNodeColor, color: '#fff', width: 120 },
-            });
-            initialEdges.push({
-                id: `${fileName}-${funcId}`,
-                source: fileName,
-                target: funcId,
-                type: 'smoothstep',
-            });
-        });
-
-        // Create edges for imports
-        Object.entries(fileData.imports || {}).forEach(([importSource, importedNames]) => {
-            importedNames.forEach(importedName => {
-                const targetId = initialNodes.find(n => n.data.label === importedName)?.id;
-                if (targetId) {
-                    initialEdges.push({
-                        id: `${fileName}-import-${importedName}`,
-                        source: fileName,
-                        target: targetId,
-                        type: 'smoothstep',
-                        animated: true,
-                        style: { stroke: '#FF0000' },
-                    });
+        function occupyGrid(x, y, width, height) {
+            for (let i = x; i < x + width; i += gridSize) {
+                for (let j = y; j < y + height; j += gridSize) {
+                    grid[`${Math.floor(i / gridSize)},${Math.floor(j / gridSize)}`] = true;
                 }
+            }
+        }
+
+        function findFreePosition(startX, startY) {
+            let x = startX;
+            let y = startY;
+            while (true) {
+                const key = `${Math.floor(x / gridSize)},${Math.floor(y / gridSize)}`;
+                if (!grid[key]) {
+                    occupyGrid(x, y, nodeWidth, nodeHeight);
+                    return { x, y };
+                }
+                x += gridSize;
+                if (x > 2000) { // Arbitrary limit, adjust as needed
+                    x = 0;
+                    y += gridSize;
+                }
+            }
+        }
+
+        function createNode(id, label, type, startX, startY) {
+            const { x, y } = findFreePosition(startX, startY);
+            return {
+                id,
+                data: { label },
+                position: { x, y },
+                style: { backgroundColor: getColorForType(type), color: '#fff', width: nodeWidth },
+            };
+        }
+
+        function getColorForType(type) {
+            switch (type) {
+                case 'file': return fileNodeColor;
+                case 'class': return classNodeColor;
+                case 'function': return functionNodeColor;
+                case 'method': return methodNodeColor;
+                case 'global': return globalNodeColor;
+                default: return '#000000';
+            }
+        }
+
+        Object.entries(data).forEach(([fileName, fileData], fileIndex) => {
+            const fileId = fileName;
+            const fileNode = createNode(fileId, fileName, 'file', 0, fileIndex * 200);
+            initialNodes.push(fileNode);
+
+            let startX = fileNode.position.x + nodeWidth + gridSize;
+            let startY = fileNode.position.y;
+
+            // Create class nodes
+            (fileData.classes || []).forEach((classObj) => {
+                const classId = `${fileId}-${classObj.name}`;
+                const classNode = createNode(classId, classObj.name, 'class', startX, startY);
+                initialNodes.push(classNode);
+                initialEdges.push({ id: `${fileId}-${classId}`, source: fileId, target: classId, type: 'bezier' });
+
+                startY = classNode.position.y + nodeHeight + gridSize;
+
+                // Create method nodes
+                (classObj.methods || []).forEach((method) => {
+                    const methodId = `${classId}-${method.name}`;
+                    const methodNode = createNode(methodId, method.name, 'method', startX + nodeWidth + gridSize, startY);
+                    initialNodes.push(methodNode);
+                    initialEdges.push({ id: `${classId}-${methodId}`, source: classId, target: methodId, type: 'bezier' });
+                    startY = methodNode.position.y + nodeHeight + gridSize;
+                });
+            });
+
+            // Create function nodes
+            (fileData.functions || []).forEach((func) => {
+                const funcId = `${fileId}-${func.name}`;
+                const funcNode = createNode(funcId, func.name, 'function', startX, startY);
+                initialNodes.push(funcNode);
+                initialEdges.push({ id: `${fileId}-${funcId}`, source: fileId, target: funcId, type: 'bezier' });
+                startY = funcNode.position.y + nodeHeight + gridSize;
+            });
+
+            // Create edges for relationships (direct and indirect)
+            ['directRelationships', 'indirectRelationships'].forEach((relationType) => {
+                Object.entries(fileData[relationType] || {}).forEach(([source, targets]) => {
+                    targets.forEach(target => {
+                        const sourceId = `${fileId}-${source}`;
+                        let targetId = `${fileId}-${target}`;
+
+                        // Handle special cases
+                        if (target === 'this.history.push') {
+                            targetId = sourceId;
+                        } else if (target === 'Error' || target === 'console.log') {
+                            if (!initialNodes.some(node => node.id === targetId)) {
+                                const globalNode = createNode(targetId, target, 'global', startX + 2 * (nodeWidth + gridSize), startY);
+                                initialNodes.push(globalNode);
+                                startY = globalNode.position.y + nodeHeight + gridSize;
+                            }
+                        }
+
+                        if (sourceId && targetId) {
+                            initialEdges.push({
+                                id: `${sourceId}-${relationType}-${targetId}`,
+                                source: sourceId,
+                                target: targetId,
+                                type: 'bezier',
+                                animated: relationType === 'indirectRelationships',
+                                style: { stroke: relationType === 'directRelationships' ? directRelationshipColor : indirectRelationshipColor },
+                            });
+                        }
+                    });
+                });
             });
         });
-    });
 
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+        setNodes(initialNodes);
+        setEdges(initialEdges);
+    }, [data]);
+
+    useEffect(() => {
+        generateFlowElements();
+    }, [generateFlowElements]);
 
     const onConnect = useCallback(
         (params) => setEdges((eds) => addEdge(params, eds)),
         [setEdges]
     );
-
-    const nodeClassName = (node) => node.type;
 
     return (
         <div style={{ height: '700px', width: '100%' }}>
@@ -120,16 +175,7 @@ function CodeFlowChart({ data, onNodeClick }) {
             >
                 <Background />
                 <Controls />
-                <MiniMap
-                    nodeStrokeColor={(n) => {
-                        if (n.style?.backgroundColor) return n.style.backgroundColor;
-                        return '#000';
-                    }}
-                    nodeColor={(n) => {
-                        return n.style?.backgroundColor || '#fff';
-                    }}
-                    nodeClassName={nodeClassName}
-                />
+                <MiniMap />
             </ReactFlow>
         </div>
     );
