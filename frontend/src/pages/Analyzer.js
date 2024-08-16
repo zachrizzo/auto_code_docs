@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Button, Container, Select, MenuItem, Typography, Box } from '@mui/material';
+import BorderedTreeView from '../components/analyzer/TreeDocumentation'; // Import the TreeView component
+import CodeFlowChart from '../components/analyzer/mindMap'; // Import the MindMap component
 import { getAIDescription } from "../api/CodeDocumentation";
 import { detectClassesAndFunctions } from '../detector';
-import CodeFlowChart from '../mindMap';
 const { ipcRenderer } = require('electron');
 const fs = window.require('fs');
 const path = window.require('path');
@@ -10,10 +11,10 @@ const path = window.require('path');
 const Analyzer = () => {
     const [language, setLanguage] = useState('javascript');
     const [results, setResults] = useState({});
-
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
     const [watchingDir, setWatchingDir] = useState(null);
+    const [viewMode, setViewMode] = useState('map'); // State to manage view mode
 
     const handleAnalyze = async () => {
         if (!watchingDir) {
@@ -71,7 +72,6 @@ const Analyzer = () => {
             return;
         }
 
-        // Split the nodeId into file name and function/method name
         const [fileName, entityName] = nodeId.split('-');
 
         if (!results[fileName]) {
@@ -83,7 +83,6 @@ const Analyzer = () => {
         const fileResults = results[fileName];
         let nodeData = null;
 
-        // Search for the entity in functions
         nodeData = fileResults.functions.find(func => func.name === entityName);
 
         if (!nodeData) {
@@ -102,8 +101,6 @@ const Analyzer = () => {
             }
         }
     }, [aiDescriptions, results]);
-
-
 
     const handleSelectDirectory = async () => {
         const selectedDir = await ipcRenderer.invoke('select-directory');
@@ -152,9 +149,21 @@ const Analyzer = () => {
             <Button variant="contained" color="primary" onClick={clear} sx={{ ml: 2 }}>
                 Clear Docs
             </Button>
+            <Button
+                variant="contained"
+                color="secondary"
+                onClick={() => setViewMode(viewMode === 'map' ? 'tree' : 'map')}
+                sx={{ ml: 2 }}
+            >
+                Toggle to {viewMode === 'map' ? 'Tree View' : 'Map View'}
+            </Button>
             <Box mt={4}>
-                <Typography variant="h4">Code Flow Chart</Typography>
-                <CodeFlowChart data={results} onNodeClick={handleNodeClick} />
+                <Typography variant="h4">Code {viewMode === 'map' ? 'Flow Chart' : 'Tree View'}</Typography>
+                {viewMode === 'map' ? (
+                    <CodeFlowChart data={results} onNodeClick={handleNodeClick} />
+                ) : (
+                    <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
+                )}
             </Box>
             {selectedNode && (
                 <Box mt={4}>
@@ -166,6 +175,6 @@ const Analyzer = () => {
             )}
         </Container>
     );
-}
+};
 
 export default Analyzer;
