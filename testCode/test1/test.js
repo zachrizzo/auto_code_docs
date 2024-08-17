@@ -66,6 +66,12 @@ class Application {
         const a = 10;
         const b = 5;
 
+        const result = () => {
+            return this.calculator.calculate('add', a, b);
+        }
+
+        result();
+
         console.log("Addition:", this.calculator.calculate('add', a, b));
         console.log("Subtraction:", this.calculator.calculate('subtract', a, b));
         console.log("Multiplication:", this.calculator.calculate('multiply', a, b));
@@ -74,6 +80,9 @@ class Application {
         console.log("Calculation History:", this.calculator.getHistory());
     }
 }
+
+
+
 
 const app = new Application();
 app.run();

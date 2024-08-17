@@ -5,6 +5,7 @@ import AddBoxRoundedIcon from '@mui/icons-material/AddBoxRounded';
 import { styled, alpha } from '@mui/material/styles';
 import { SimpleTreeView } from '@mui/x-tree-view/SimpleTreeView';
 import { TreeItem, treeItemClasses } from '@mui/x-tree-view/TreeItem';
+import { v4 as uuidv4 } from 'uuid';
 
 const CustomTreeItem = styled(TreeItem)(({ theme }) => ({
     [`& .${treeItemClasses.content}`]: {
@@ -36,7 +37,7 @@ function EndIcon(props) {
 }
 
 export default function BorderedTreeView({ data, onNodeClick }) {
-    const renderTreeItems = (node) => (
+    const renderTreeItems = React.useCallback((node) => (
         <CustomTreeItem
             key={node.id}
             itemId={node.id}
@@ -45,54 +46,65 @@ export default function BorderedTreeView({ data, onNodeClick }) {
         >
             {node.children && node.children.map((childNode) => renderTreeItems(childNode))}
         </CustomTreeItem>
-    );
+    ), [onNodeClick]);
 
-    const createTreeData = (data) => {
-        let uniqueCounter = 0;
-        const generateUniqueId = () => {
-            uniqueCounter++;
-            return `unique-${uniqueCounter}`;
+    const createTreeData = React.useCallback((data) => {
+        const createFunctionNode = (func, path, seenFunctions) => {
+            if (seenFunctions.has(func.name)) return null;
+            seenFunctions.add(func.name);
+
+            const functionNode = {
+                id: uuidv4(),
+                label: func.name,
+                path: path,
+                children: [],
+            };
+
+            if (func.nestedFunctions && func.nestedFunctions.length > 0) {
+                functionNode.children = func.nestedFunctions
+                    .map(nestedFunc => createFunctionNode(nestedFunc, `${path}-${nestedFunc.name}`, seenFunctions))
+                    .filter(Boolean);
+            }
+
+            return functionNode;
         };
 
         return Object.entries(data).map(([fileName, fileData]) => {
             const fileChildren = [];
+            const seenFunctions = new Set();
 
-            // Add classes and their methods
+            // Handle classes and their methods
             (fileData.classes || []).forEach((classObj) => {
-                const classChildren = (classObj.methods || []).map((method) => ({
-                    id: generateUniqueId(),
-                    label: method.name,
-                    path: `${fileName}-${classObj.name}-${method.name}`,
-                    children: [],
-                }));
+                const classChildren = (classObj.methods || [])
+                    .map((method) => createFunctionNode(method, `${fileName}-${classObj.name}-${method.name}`, seenFunctions))
+                    .filter(Boolean);
 
-                fileChildren.push({
-                    id: generateUniqueId(),
-                    label: classObj.name,
-                    path: `${fileName}-${classObj.name}`,
-                    children: classChildren,
-                });
+                if (classChildren.length > 0) {
+                    fileChildren.push({
+                        id: uuidv4(),
+                        label: classObj.name,
+                        path: `${fileName}-${classObj.name}`,
+                        children: classChildren,
+                    });
+                }
             });
 
-            // Add functions
+            // Handle top-level functions
             (fileData.functions || []).forEach((func) => {
-                fileChildren.push({
-                    id: generateUniqueId(),
-                    label: func.name,
-                    path: `${fileName}-${func.name}`,
-                    children: [],
-                });
+                const node = createFunctionNode(func, `${fileName}-${func.name}`, seenFunctions);
+                if (node) fileChildren.push(node);
             });
 
             return {
-                id: generateUniqueId(),
+                id: uuidv4(),
                 label: fileName,
                 path: fileName,
                 children: fileChildren,
             };
         });
-    };
-    const treeData = createTreeData(data);
+    }, []);
+
+    const treeData = React.useMemo(() => createTreeData(data), [data, createTreeData]);
 
     return (
         <SimpleTreeView

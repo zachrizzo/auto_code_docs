@@ -4,6 +4,7 @@ import { Button, Container, TextField, Select, MenuItem, Typography, Box, ThemeP
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer';
 import { initializeParser } from './detector';
+import Header from './components/layout/Header'; // Importing the new Header component
 
 
 const lightThemeColors = {
@@ -18,7 +19,7 @@ const lightThemeColors = {
 const darkThemeColors = {
     background: '#0C1826',
     primaryStart: '#7C64F9',
-    primaryEnd: '#03dac6',
+    primaryEnd: '#5E5CEB',
     secondaryMain: '#03dac6',
     textMain: '#ffffff',
     inputBackground: '#1B2A3B',
@@ -202,14 +203,10 @@ function App() {
     return (
         <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
             <CssBaseline />
-            <GlobalStyles
-                styles={{ body: { backgroundColor: darkMode ? darkThemeColors.background : lightThemeColors.background } }}
-            />
+            <GlobalStyles styles={{ body: { backgroundColor: darkMode ? darkThemeColors.background : lightThemeColors.background } }} />
             <Router>
+                <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
                 <Container>
-                    <Button onClick={toggleDarkMode} variant="contained" color="secondary">
-                        Toggle {darkMode ? "Light" : "Dark"} Mode
-                    </Button>
                     <Routes>
                         <Route path="/" element={<Home />} />
                         <Route path="/analyze" element={<Analyzer />} />

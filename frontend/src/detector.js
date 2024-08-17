@@ -24,6 +24,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
     const tree = parser.parse(code);
     const cursor = tree.walk();
 
+
     const results = {
         fileName,
         classes: [],
@@ -32,7 +33,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         indirectRelationships: {},
         imports: {},
         exports: {},
-        methodToFunctionRelationships: {}
+        methodToFunctionRelationships: []  // Initialize as an empty array
     };
 
     function analyzeMethodBody(methodNode, className, results) {
@@ -40,17 +41,17 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         const methodName = methodNode.childForFieldName('name')?.text || methodNode.parent?.childForFieldName('name')?.text;
 
         if (className && methodName) {
+            if (!results.methodToFunctionRelationships) {
+                results.methodToFunctionRelationships = [];
+            }
+
             functionCalls.forEach(call => {
                 const callName = call.trim().slice(0, -1); // Remove the opening parenthesis
-                if (!results.methodToFunctionRelationships[className]) {
-                    results.methodToFunctionRelationships[className] = {};
-                }
-                if (!results.methodToFunctionRelationships[className][methodName]) {
-                    results.methodToFunctionRelationships[className][methodName] = [];
-                }
-                if (!results.methodToFunctionRelationships[className][methodName].includes(callName)) {
-                    results.methodToFunctionRelationships[className][methodName].push(callName);
-                }
+                results.methodToFunctionRelationships.push({
+                    class: className,
+                    method: methodName,
+                    calledFunction: callName
+                });
             });
         }
     }
