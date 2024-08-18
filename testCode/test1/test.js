@@ -54,7 +54,6 @@ export class Calculator {
     }
 }
 
-// app.js
 import { Calculator } from './mathOperations';
 
 class Application {

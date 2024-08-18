@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
     ReactFlow,
     Background,
@@ -7,166 +7,18 @@ import {
     useNodesState,
     useEdgesState,
     addEdge,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
-
-
-
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import { transformToReactFlowData } from '../../utils/transformToReactFlowData'; // Import the transformation utility
 
 function CodeFlowChart({ data, onNodeClick }) {
-    const fileNodeColor = '#FFA500';
-    const classNodeColor = '#4CAF50';
-    const functionNodeColor = '#2196F3';
-    const methodNodeColor = '#9C27B0';
-    const globalNodeColor = '#FF0000';
-    const directRelationshipColor = '#000000';
-    const indirectRelationshipColor = '#888888';
-
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
     const generateFlowElements = useCallback(() => {
-        const initialNodes = [];
-        const initialEdges = [];
-        const grid = {};
-        const gridSize = 50; // Size of each grid cell
-        const nodeWidth = 180;
-        const nodeHeight = 100;
-
-        function occupyGrid(x, y, width, height) {
-            for (let i = x; i < x + width; i += gridSize) {
-                for (let j = y; j < y + height; j += gridSize) {
-                    grid[`${Math.floor(i / gridSize)},${Math.floor(j / gridSize)}`] = true;
-                }
-            }
-        }
-
-        function findFreePosition(startX, startY) {
-            let x = startX;
-            let y = startY;
-            while (true) {
-                const key = `${Math.floor(x / gridSize)},${Math.floor(y / gridSize)}`;
-                if (!grid[key]) {
-                    occupyGrid(x, y, nodeWidth, nodeHeight);
-                    return { x, y };
-                }
-                x += gridSize;
-                if (x > 2000) { // Arbitrary limit, adjust as needed
-                    x = 0;
-                    y += gridSize;
-                }
-            }
-        }
-
-        function createNode(id, label, type, startX, startY) {
-            const { x, y } = findFreePosition(startX, startY);
-            return {
-                id,
-                data: { label },
-                position: { x, y },
-                style: { backgroundColor: getColorForType(type), color: '#fff', width: nodeWidth },
-            };
-        }
-
-        function getColorForType(type) {
-            switch (type) {
-                case 'file': return fileNodeColor;
-                case 'class': return classNodeColor;
-                case 'function': return functionNodeColor;
-                case 'method': return methodNodeColor;
-                case 'global': return globalNodeColor;
-                default: return '#000000';
-            }
-        }
-
-        Object.entries(data).forEach(([fileName, fileData], fileIndex) => {
-            const fileId = fileName;
-            const fileNode = createNode(fileId, fileName, 'file', 0, fileIndex * 200);
-            initialNodes.push(fileNode);
-
-            let startX = fileNode.position.x + nodeWidth + gridSize;
-            let startY = fileNode.position.y;
-
-            // Create class nodes
-            (fileData.classes || []).forEach((classObj) => {
-                const classId = `${fileId}-${classObj.name}`;
-                const classNode = createNode(classId, classObj.name, 'class', startX, startY);
-                initialNodes.push(classNode);
-                initialEdges.push({ id: `${fileId}-${classId}`, source: fileId, target: classId, type: 'bezier' });
-
-                startY = classNode.position.y + nodeHeight + gridSize;
-
-                // Create method nodes
-                (classObj.methods || []).forEach((method) => {
-                    const methodId = `${classId}-${method.name}`;
-                    const methodNode = createNode(methodId, method.name, 'method', startX + nodeWidth + gridSize, startY);
-                    initialNodes.push(methodNode);
-                    initialEdges.push({ id: `${classId}-${methodId}`, source: classId, target: methodId, type: 'bezier' });
-                    startY = methodNode.position.y + nodeHeight + gridSize;
-                });
-            });
-
-            // Create function nodes
-            (fileData.functions || []).forEach((func) => {
-                const funcId = `${fileId}-${func.name}`;
-                const funcNode = createNode(funcId, func.name, 'function', startX, startY);
-                initialNodes.push(funcNode);
-                initialEdges.push({ id: `${fileId}-${funcId}`, source: fileId, target: funcId, type: 'bezier' });
-                startY = funcNode.position.y + nodeHeight + gridSize;
-            });
-
-            // Create edges for relationships (direct and indirect)
-            // Create edges for relationships (direct and indirect)
-            ['directRelationships', 'indirectRelationships'].forEach((relationType) => {
-                Object.entries(fileData[relationType] || {}).forEach(([source, targets]) => {
-                    targets.forEach(target => {
-                        const sourceId = `${fileId}-${source}`;
-                        let targetId = `${fileId}-${target}`;
-
-                        // Search across all files for the target if not found in the current file
-                        if (!initialNodes.some(node => node.id === targetId)) {
-                            Object.entries(data).forEach(([otherFileName, otherFileData]) => {
-                                if (otherFileName !== fileName) {
-                                    const otherFileId = otherFileName;
-                                    const otherTargetNode = otherFileData.functions.find(func => func.name === target);
-                                    if (otherTargetNode) {
-                                        targetId = `${otherFileId}-${target}`;
-                                        if (!initialNodes.some(node => node.id === targetId)) {
-                                            const targetNode = createNode(targetId, target, 'function', 0, initialNodes.length * 200);
-                                            initialNodes.push(targetNode);
-                                            initialEdges.push({
-                                                id: `${sourceId}-${relationType}-${targetId}`,
-                                                source: sourceId,
-                                                target: targetId,
-                                                type: 'bezier',
-                                                animated: relationType === 'indirectRelationships',
-                                                style: { stroke: relationType === 'directRelationships' ? directRelationshipColor : indirectRelationshipColor },
-                                            });
-                                        }
-                                    }
-                                }
-                            });
-                        }
-
-                        if (sourceId && targetId && initialNodes.some(node => node.id === targetId)) {
-                            initialEdges.push({
-                                id: `${sourceId}-${relationType}-${targetId}`,
-                                source: sourceId,
-                                target: targetId,
-                                type: 'bezier',
-                                animated: relationType === 'indirectRelationships',
-                                style: { stroke: relationType === 'directRelationships' ? directRelationshipColor : indirectRelationshipColor },
-                            });
-                        }
-                    });
-                });
-            });
-
-        });
-
-
-        setNodes(initialNodes);
-        setEdges(initialEdges);
+        const { nodes, edges } = transformToReactFlowData(data);
+        setNodes(nodes);
+        setEdges(edges);
     }, [data]);
 
     useEffect(() => {

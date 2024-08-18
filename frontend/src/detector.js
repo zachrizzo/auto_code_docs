@@ -1,6 +1,15 @@
 import * as Parser from 'web-tree-sitter';
+
 let parsers = {};
 let globalResults = {}; // To store parsed results for all files
+let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
+let currentAnalysisId = 0;
+
+
+// Function to generate unique IDs
+function generateUniqueId() {
+    return Math.random().toString(36).substr(2, 9);
+}
 
 export async function initializeParser() {
     await Parser.init({
@@ -13,6 +22,7 @@ export async function initializeParser() {
     parsers.javascript = JavaScript;
 }
 
+
 export async function detectClassesAndFunctions(language, code, fileName) {
     if (!parsers[language]) {
         await initializeParser();
@@ -24,6 +34,9 @@ export async function detectClassesAndFunctions(language, code, fileName) {
     const tree = parser.parse(code);
     const cursor = tree.walk();
 
+    const processedFunctions = new Set();
+
+    currentAnalysisId++; // Increment for each new analysis
 
     const results = {
         fileName,
@@ -31,149 +44,111 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         functions: [],
         directRelationships: {},
         indirectRelationships: {},
-        imports: {},
-        exports: {},
-        methodToFunctionRelationships: []  // Initialize as an empty array
+        crossFileRelationships: {},
+        allDeclarations: {},
+        recursiveRelationships: [],
+        analysisId: currentAnalysisId
     };
 
-    function analyzeMethodBody(methodNode, className, results) {
-        const functionCalls = methodNode.text.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
-        const methodName = methodNode.childForFieldName('name')?.text || methodNode.parent?.childForFieldName('name')?.text;
-
-        if (className && methodName) {
-            if (!results.methodToFunctionRelationships) {
-                results.methodToFunctionRelationships = [];
-            }
-
-            functionCalls.forEach(call => {
-                const callName = call.trim().slice(0, -1); // Remove the opening parenthesis
-                results.methodToFunctionRelationships.push({
-                    class: className,
-                    method: methodName,
-                    calledFunction: callName
-                });
-            });
-        }
+    function addDeclaration(name, type, path, code) {
+        const id = generateUniqueId();
+        const declaration = {
+            id,
+            name,
+            type,
+            path,
+            code,
+            analysisId: currentAnalysisId
+        };
+        results.allDeclarations[id] = declaration;
+        globalDeclarations[name] = declaration;
+        console.log('Declaration added:', declaration);
+        return id;
     }
 
-    function traverse(cursor, parentName = null) {
+    // Further in the code, when parsing and adding to relationships:
+    console.log('Parsed relationships:', results.directRelationships);
+
+
+    function analyzeMethodBody(methodNode, parentId, results, depth = 0) {
+        if (!methodNode || !methodNode.text) {
+            return;
+        }
+
+        const functionCalls = methodNode.text.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
+        functionCalls.forEach(call => {
+            const callName = call.trim().slice(0, -1);
+            const calledId = Object.keys(results.allDeclarations).find(id => results.allDeclarations[id].name === callName);
+            if (calledId && calledId !== parentId) {
+                results.indirectRelationships[parentId] = results.indirectRelationships[parentId] || [];
+                if (!results.indirectRelationships[parentId].includes(calledId)) {
+                    results.indirectRelationships[parentId].push(calledId);
+
+                    if (depth < 3) {
+                        const calledFunction = results.allDeclarations[calledId];
+                        if (calledFunction && calledFunction.code) {
+                            analyzeMethodBody(calledFunction, calledId, results, depth + 1);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
         do {
             const node = cursor.currentNode;
             const type = node.type;
 
-            let currentName = null;
-
             if (type === 'class_declaration' || type === 'class') {
                 const className = node.childForFieldName('name')?.text;
                 if (className) {
-                    currentName = className;
-                    results.classes.push({
-                        name: className,
-                        code: node.text,
-                        methods: [],
-                    });
-                    results.directRelationships[className] = [];
-                    results.indirectRelationships[className] = [];
-                }
-            } else if (type === 'method_definition' || type === 'function_declaration' || type === 'function') {
-                const functionName = node.childForFieldName('name')?.text || node.parent?.childForFieldName('name')?.text;
-                if (functionName) {
-                    currentName = functionName;
-                    const functionInfo = {
-                        name: functionName,
-                        code: node.text,
-                    };
-                    if (parentName && results.classes.find(c => c.name === parentName)) {
-                        results.classes.find(c => c.name === parentName).methods.push(functionInfo);
-                        results.directRelationships[parentName] = results.directRelationships[parentName] || [];
-                        results.directRelationships[parentName].push(functionName);
-                        analyzeMethodBody(node, parentName, results);
-                    } else {
-                        results.functions.push(functionInfo);
-                        analyzeMethodBody(node, null, results);
-                    }
-                    results.indirectRelationships[functionName] = [];
-                }
-            } else if (type === 'variable_declarator') {
-                const variableName = node.childForFieldName('name')?.text;
-                const initNode = node.childForFieldName('value');
-
-                if (initNode && (initNode.type === 'arrow_function' || initNode.type === 'function')) {
-                    const functionInfo = {
-                        name: variableName,
-                        code: node.text,
-                    };
-                    currentName = variableName;
-
-                    if (parentName && results.classes.find(c => c.name === parentName)) {
-                        results.classes.find(c => c.name === parentName).methods.push(functionInfo);
-                        results.directRelationships[parentName] = results.directRelationships[parentName] || [];
-                        results.directRelationships[parentName].push(variableName);
-                        analyzeMethodBody(initNode, parentName, results);
-                    } else {
-                        results.functions.push(functionInfo);
-                        analyzeMethodBody(initNode, null, results);
-                    }
-                    results.indirectRelationships[variableName] = [];
-                }
-            } else if (type === 'call_expression') {
-                const callee = node.childForFieldName('function')?.text;
-                if (callee && parentName) {
-                    results.indirectRelationships[parentName] = results.indirectRelationships[parentName] || [];
-                    if (!results.indirectRelationships[parentName].includes(callee)) {
-                        if (!['push', 'pop', 'shift', 'unshift'].includes(callee)) {
-                            results.indirectRelationships[parentName].push(callee);
+                    const path = `${parentPath}${className}`;
+                    const id = addDeclaration(className, 'class', path, node.text);
+                    if (id) {
+                        results.classes.push({ id });
+                        results.directRelationships[id] = [];
+                        results.indirectRelationships[id] = [];
+                        if (parentId) {
+                            results.directRelationships[parentId].push(id);
                         }
-                    }
-                    const parentClass = results.classes.find(c => c.methods.some(m => m.name === parentName));
-                    if (parentClass) {
-                        results.indirectRelationships[parentClass.name] = results.indirectRelationships[parentClass.name] || [];
-                        if (!results.indirectRelationships[parentClass.name].includes(callee)) {
-                            results.indirectRelationships[parentClass.name].push(callee);
+                        if (cursor.gotoFirstChild()) {
+                            traverse(cursor, `${path}-`, id, currentFunctionId);
+                            cursor.gotoParent();
                         }
                     }
                 }
-            } else if (type === 'new_expression') {
-                const className = node.childForFieldName('constructor')?.text;
-                if (className && parentName) {
-                    results.indirectRelationships[parentName] = results.indirectRelationships[parentName] || [];
-                    if (!results.indirectRelationships[parentName].includes(className)) {
-                        results.indirectRelationships[parentName].push(className);
+            } else if (type === 'function_declaration' || type === 'method_definition' || type === 'function' || type === 'arrow_function') {
+                let functionName = node.childForFieldName('name')?.text;
+                if (!functionName && type === 'arrow_function') {
+                    const parent = node.parent;
+                    if (parent.type === 'variable_declarator') {
+                        functionName = parent.childForFieldName('name')?.text;
                     }
                 }
-            } else if (type === 'require') {
-                const moduleName = node.childForFieldName('name')?.text;
-                const importName = node.parent?.childForFieldName('name')?.text; // Get the variable the module is assigned to
-                if (moduleName && importName) {
-                    results.imports[importName] = moduleName;
-                }
-            } else if (type === 'import_statement') {
-                const importSpecifiers = node.namedChildren.filter(child => child.type === 'import_specifier');
-                importSpecifiers.forEach(specifier => {
-                    const importedName = specifier.childForFieldName('name')?.text;
-                    const localName = specifier.childForFieldName('alias')?.text || importedName;
-                    if (importedName) {
-                        results.imports[localName] = importedName;
-                    }
-                });
-            } else if (type === 'export_statement') {
-                const declaration = node.childForFieldName('declaration');
-                if (declaration) {
-                    const exportedName = declaration.childForFieldName('name')?.text;
-                    if (exportedName) {
-                        results.exports[exportedName] = true;
-                    }
-                } else {
-                    // Handle default exports
-                    const defaultExport = node.childForFieldName('value');
-                    if (defaultExport) {
-                        results.exports['default'] = true;
-                    }
-                }
-            }
+                if (functionName && !processedFunctions.has(functionName)) {
+                    const path = `${parentPath}${functionName}`;
+                    const id = addDeclaration(functionName, 'function', path, node.text);
+                    if (id) {
+                        results.functions.push({ id, parentFunctionId: currentFunctionId });
+                        results.directRelationships[id] = [];
+                        results.indirectRelationships[id] = [];
+                        if (currentFunctionId) {
+                            results.directRelationships[currentFunctionId].push(id);
+                        } else if (parentId) {
+                            results.directRelationships[parentId].push(id);
+                        }
+                        analyzeMethodBody(node, id, results);
+                        processedFunctions.add(functionName);
 
-            if (cursor.gotoFirstChild()) {
-                traverse(cursor, currentName || parentName);
+                        if (cursor.gotoFirstChild()) {
+                            traverse(cursor, `${path}-`, parentId, id);
+                            cursor.gotoParent();
+                        }
+                    }
+                }
+            } else if (cursor.gotoFirstChild()) {
+                traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
                 cursor.gotoParent();
             }
         } while (cursor.gotoNextSibling());
@@ -181,19 +156,41 @@ export async function detectClassesAndFunctions(language, code, fileName) {
 
     traverse(cursor);
 
-    if (Object.keys(results.exports).length === 0) {
-        delete results.exports;
+    // Update globalResults
+    if (!globalResults[fileName]) {
+        globalResults[fileName] = {};
     }
 
-    globalResults[fileName] = results; // Store the results globally
+    // Remove old declarations and relationships
+    for (const key in globalResults[fileName]) {
+        if (Array.isArray(globalResults[fileName][key])) {
+            globalResults[fileName][key] = globalResults[fileName][key].filter(item => item.analysisId === currentAnalysisId);
+        } else if (typeof globalResults[fileName][key] === 'object') {
+            for (const subKey in globalResults[fileName][key]) {
+                if (globalResults[fileName][key][subKey].analysisId !== currentAnalysisId) {
+                    delete globalResults[fileName][key][subKey];
+                }
+            }
+        }
+    }
+
+    // Merge new results
+    Object.assign(globalResults[fileName], results);
+
+    // Clean up old global declarations
+    for (const [name, declaration] of Object.entries(globalDeclarations)) {
+        if (declaration.analysisId !== currentAnalysisId) {
+            delete globalDeclarations[name];
+        }
+    }
+
 
     return results;
 }
 
 export function resolveCrossFileDependencies() {
-    const resolvedResults = JSON.parse(JSON.stringify(globalResults)); // Clone the global results
+    const resolvedResults = JSON.parse(JSON.stringify(globalResults));
 
-    // First pass: identify all exports
     const allExports = {};
     for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
         if (fileResults.exports) {
@@ -203,15 +200,14 @@ export function resolveCrossFileDependencies() {
         }
     }
 
-    // Second pass: resolve cross-file relationships
     for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
         fileResults.crossFileRelationships = {};
 
-        // Check all functions and methods for calls to exported functions
         const checkForCalls = (entity, entityName, entityType) => {
+            if (!entity || !entity.code) return;
             const calls = entity.code.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
             calls.forEach(call => {
-                const callName = call.trim().slice(0, -1); // Remove the opening parenthesis
+                const callName = call.trim().slice(0, -1);
                 if (allExports[callName] && allExports[callName] !== fileName) {
                     if (!fileResults.crossFileRelationships[entityType]) {
                         fileResults.crossFileRelationships[entityType] = {};
@@ -225,28 +221,56 @@ export function resolveCrossFileDependencies() {
         };
 
         // Check functions
-        fileResults.functions.forEach(func => {
-            checkForCalls(func, func.name, 'functions');
-        });
-
-        // Check methods in classes
-        fileResults.classes.forEach(cls => {
-            cls.methods.forEach(method => {
-                checkForCalls(method, method.name, `classes.${cls.name}.methods`);
+        if (Array.isArray(fileResults.functions)) {
+            fileResults.functions.forEach(func => {
+                if (func && func.id) {
+                    const funcDeclaration = fileResults.allDeclarations[func.id];
+                    if (funcDeclaration && funcDeclaration.name) {
+                        checkForCalls(funcDeclaration, funcDeclaration.name, 'functions');
+                    }
+                }
             });
-        });
+        }
 
-        // Also check indirect relationships
-        for (const [funcName, calls] of Object.entries(fileResults.indirectRelationships)) {
-            calls.forEach(call => {
-                if (allExports[call] && allExports[call] !== fileName) {
-                    if (!fileResults.crossFileRelationships.indirectRelationships) {
-                        fileResults.crossFileRelationships.indirectRelationships = {};
+        // Check classes
+        if (Array.isArray(fileResults.classes)) {
+            fileResults.classes.forEach(cls => {
+                if (cls && cls.id) {
+                    const classDeclaration = fileResults.allDeclarations[cls.id];
+                    if (classDeclaration && classDeclaration.name) {
+                        Object.values(fileResults.allDeclarations)
+                            .filter(decl => decl && decl.path && classDeclaration.path &&
+                                decl.path.startsWith(`${classDeclaration.path}-`) &&
+                                decl.type === 'function')
+                            .forEach(method => {
+                                if (method && method.name) {
+                                    checkForCalls(method, method.name, `classes.${classDeclaration.name}.methods`);
+                                }
+                            });
                     }
-                    if (!fileResults.crossFileRelationships.indirectRelationships[funcName]) {
-                        fileResults.crossFileRelationships.indirectRelationships[funcName] = {};
-                    }
-                    fileResults.crossFileRelationships.indirectRelationships[funcName][call] = allExports[call];
+                }
+            });
+        }
+
+        // Check indirect relationships
+        if (fileResults.indirectRelationships) {
+            Object.entries(fileResults.indirectRelationships).forEach(([funcId, calls]) => {
+                const funcDeclaration = fileResults.allDeclarations[funcId];
+                if (funcDeclaration && funcDeclaration.name) {
+                    calls.forEach(callId => {
+                        const callDeclaration = fileResults.allDeclarations[callId];
+                        if (callDeclaration && callDeclaration.name &&
+                            allExports[callDeclaration.name] &&
+                            allExports[callDeclaration.name] !== fileName) {
+                            if (!fileResults.crossFileRelationships.indirectRelationships) {
+                                fileResults.crossFileRelationships.indirectRelationships = {};
+                            }
+                            if (!fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name]) {
+                                fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name] = {};
+                            }
+                            fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name][callDeclaration.name] = allExports[callDeclaration.name];
+                        }
+                    });
                 }
             });
         }

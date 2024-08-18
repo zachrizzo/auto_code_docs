@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Button, Container, Select, MenuItem, Typography, Box } from '@mui/material';
-import BorderedTreeView from '../components/analyzer/TreeDocumentation'; // Import the TreeView component
-import CodeFlowChart from '../components/analyzer/mindMap'; // Import the MindMap component
+import BorderedTreeView from '../components/analyzer/TreeDocumentation';
+import CodeFlowChart from '../components/analyzer/mindMap';
 import { getAIDescription } from "../api/CodeDocumentation";
-import { detectClassesAndFunctions } from '../detector';
+import { detectClassesAndFunctions, resolveCrossFileDependencies } from '../detector';
+import { transformToReactFlowData } from '../utils/transformToReactFlowData'; // Import the transformation utility
 const { ipcRenderer } = require('electron');
 const fs = window.require('fs');
 const path = window.require('path');
@@ -14,9 +15,9 @@ const Analyzer = () => {
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
     const [watchingDir, setWatchingDir] = useState(null);
-    const [viewMode, setViewMode] = useState('map'); // State to manage view mode
+    const [viewMode, setViewMode] = useState('map');
 
-    const handleAnalyze = async () => {
+    const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
             alert('Please select a directory to analyze.');
             return;
@@ -28,6 +29,8 @@ const Analyzer = () => {
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const fileName = path.basename(filePath);
             const analysisResults = await detectClassesAndFunctions(language, fileContent, fileName);
+
+            console.log(`Analysis results for ${fileName}:`, analysisResults);
             aggregatedResults[fileName] = analysisResults;
         };
 
@@ -47,20 +50,20 @@ const Analyzer = () => {
         };
 
         await walkDirectory(watchingDir);
-        setResults(aggregatedResults);
 
-        console.log("Aggregated Results:", aggregatedResults); // Debugging: Log results
-    };
+        console.log("Aggregated Results Before Dependency Resolution:", aggregatedResults);
+
+        // Resolve cross-file dependencies
+        const resolvedResults = resolveCrossFileDependencies(aggregatedResults);
+
+        console.log("Aggregated Results After Dependency Resolution:", resolvedResults);
+
+        setResults(resolvedResults);
+    }, [language, watchingDir]);
 
     const clear = () => {
         setAIDescriptions({});
-        setResults({
-            classes: [],
-            functions: [],
-            classNames: [],
-            functionNames: [],
-            relationships: {},
-        });
+        setResults({});
     };
 
     const handleNodeClick = useCallback(async (nodeId) => {
@@ -106,7 +109,7 @@ const Analyzer = () => {
         const selectedDir = await ipcRenderer.invoke('select-directory');
         if (selectedDir) {
             setWatchingDir(selectedDir);
-            clear(); // Clear previous analysis results
+            clear();
         }
     };
 
@@ -165,14 +168,16 @@ const Analyzer = () => {
                     <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
                 )}
             </Box>
-            {selectedNode && (
-                <Box mt={4}>
-                    <Typography variant="h5">{selectedNode}</Typography>
-                    <Typography variant="body1">
-                        {aiDescriptions[selectedNode] || "Loading description..."}
-                    </Typography>
-                </Box>
-            )}
+            {
+                selectedNode && (
+                    <Box mt={4}>
+                        <Typography variant="h5">{selectedNode}</Typography>
+                        <Typography variant="body1">
+                            {aiDescriptions[selectedNode] || "Loading description..."}
+                        </Typography>
+                    </Box>
+                )
+            }
         </Container>
     );
 };
