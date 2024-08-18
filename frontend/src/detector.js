@@ -5,7 +5,6 @@ let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
 
-
 // Function to generate unique IDs
 function generateUniqueId() {
     return Math.random().toString(36).substr(2, 9);
@@ -21,7 +20,6 @@ export async function initializeParser() {
     const JavaScript = await Parser.Language.load('dist/tree-sitter-javascript.wasm');
     parsers.javascript = JavaScript;
 }
-
 
 export async function detectClassesAndFunctions(language, code, fileName) {
     if (!parsers[language]) {
@@ -66,10 +64,6 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         return id;
     }
 
-    // Further in the code, when parsing and adding to relationships:
-    console.log('Parsed relationships:', results.directRelationships);
-
-
     function analyzeMethodBody(methodNode, parentId, results, depth = 0) {
         if (!methodNode || !methodNode.text) {
             return;
@@ -100,7 +94,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
             const node = cursor.currentNode;
             const type = node.type;
 
-            if (type === 'class_declaration' || type === 'class') {
+            if (type === 'class_declaration' || type === 'class' || type === 'class_expression') {
                 const className = node.childForFieldName('name')?.text;
                 if (className) {
                     const path = `${parentPath}${className}`;
@@ -118,9 +112,16 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                         }
                     }
                 }
-            } else if (type === 'function_declaration' || type === 'method_definition' || type === 'function' || type === 'arrow_function') {
+            } else if (
+                type === 'function_declaration' ||
+                type === 'method_definition' ||
+                type === 'function' ||
+                type === 'arrow_function' ||
+                type === 'generator_function' ||
+                type === 'async_function'
+            ) {
                 let functionName = node.childForFieldName('name')?.text;
-                if (!functionName && type === 'arrow_function') {
+                if (!functionName && (type === 'arrow_function' || type === 'function')) {
                     const parent = node.parent;
                     if (parent.type === 'variable_declarator') {
                         functionName = parent.childForFieldName('name')?.text;
@@ -154,6 +155,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         } while (cursor.gotoNextSibling());
     }
 
+
     traverse(cursor);
 
     // Update globalResults
@@ -183,7 +185,6 @@ export async function detectClassesAndFunctions(language, code, fileName) {
             delete globalDeclarations[name];
         }
     }
-
 
     return results;
 }

@@ -31,7 +31,9 @@ const Analyzer = () => {
             const analysisResults = await detectClassesAndFunctions(language, fileContent, fileName);
 
             console.log(`Analysis results for ${fileName}:`, analysisResults);
-            aggregatedResults[fileName] = analysisResults;
+
+            // Use filePath as the key to avoid overwriting
+            aggregatedResults[filePath] = analysisResults;
         };
 
         const walkDirectory = (dir) => {
@@ -60,6 +62,7 @@ const Analyzer = () => {
 
         setResults(resolvedResults);
     }, [language, watchingDir]);
+
 
     const clear = () => {
         setAIDescriptions({});

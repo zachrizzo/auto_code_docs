@@ -7,65 +7,51 @@ export function transformToReactFlowData(parsedData) {
         return { nodes, edges };
     }
 
-    // Extract the file name (assuming there's only one file)
-    const fileName = Object.keys(parsedData)[0];
-    const fileData = parsedData[fileName];
+    // Iterate over each file in the parsed data
+    for (const [fileName, fileData] of Object.entries(parsedData)) {
+        if (!fileData || typeof fileData !== 'object') {
+            console.error('Invalid file data for:', fileName);
+            continue;
+        }
 
-    if (!fileData || typeof fileData !== 'object') {
-        console.error('Invalid file data for:', fileName);
-        return { nodes, edges };
+        const allDeclarations = fileData.allDeclarations || {};
+        const directRelationships = fileData.directRelationships || {};
+        const indirectRelationships = fileData.indirectRelationships || {};
+
+        // Create nodes for each declaration
+        for (const [id, declaration] of Object.entries(allDeclarations)) {
+            nodes.push({
+                id: id,
+                data: { label: declaration.name },
+                position: { x: Math.random() * 400, y: Math.random() * 400 }
+            });
+        }
+
+        // Helper function to add edges
+        const addEdges = (sourceId, targetIds, isIndirect = false) => {
+            targetIds.forEach(targetId => {
+                if (targetId && targetId !== "undefined") {
+                    edges.push({
+                        id: `${sourceId}-${targetId}${isIndirect ? '-indirect' : ''}`,
+                        source: sourceId,
+                        target: targetId,
+                        animated: isIndirect,
+                        style: isIndirect ? { stroke: '#f6ab6c' } : {}
+                    });
+                }
+            });
+        };
+
+        // Create edges for direct relationships
+        for (const [sourceId, targetIds] of Object.entries(directRelationships)) {
+            addEdges(sourceId, targetIds);
+        }
+
+        // Create edges for indirect relationships
+        for (const [sourceId, targetIds] of Object.entries(indirectRelationships)) {
+            addEdges(sourceId, targetIds, true);
+        }
     }
-
-    const allDeclarations = fileData.allDeclarations || {};
-    const directRelationships = fileData.directRelationships || {};
-    const indirectRelationships = fileData.indirectRelationships || {};
-
-    console.log("Processing declarations:", allDeclarations);
-    console.log("Processing direct relationships:", directRelationships);
-    console.log("Processing indirect relationships:", indirectRelationships);
-
-    // Create nodes
-    for (const [id, declaration] of Object.entries(allDeclarations)) {
-        console.log("Creating node for:", declaration.name);
-        nodes.push({
-            id: id,
-            data: { label: declaration.name },
-            position: { x: Math.random() * 400, y: Math.random() * 400 }
-        });
-    }
-
-    // Create edges for direct relationships
-    for (const [sourceId, targetIds] of Object.entries(directRelationships)) {
-        console.log("Creating edges for source:", sourceId, "with targets:", targetIds);
-        targetIds.forEach(targetId => {
-            if (targetId && targetId !== "undefined") {
-                edges.push({
-                    id: `${sourceId}-${targetId}`,
-                    source: sourceId,
-                    target: targetId,
-                });
-            }
-        });
-    }
-
-    // Create edges for indirect relationships (optional)
-    for (const [sourceId, targetIds] of Object.entries(indirectRelationships)) {
-        console.log("Creating indirect edges for source:", sourceId, "with targets:", targetIds);
-        targetIds.forEach(targetId => {
-            if (targetId && targetId !== "undefined") {
-                edges.push({
-                    id: `${sourceId}-${targetId}-indirect`,
-                    source: sourceId,
-                    target: targetId,
-                    animated: true,
-                    style: { stroke: '#f6ab6c' }
-                });
-            }
-        });
-    }
-
-    console.log("Generated nodes:", nodes);
-    console.log("Generated edges:", edges);
 
     return { nodes, edges };
 }
