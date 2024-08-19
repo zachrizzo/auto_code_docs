@@ -3,7 +3,7 @@ import { Button, Container, Select, MenuItem, Typography, Box } from '@mui/mater
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
 import CodeFlowChart from '../components/analyzer/mindMap/mindMap';
 import { getAIDescription } from "../api/CodeDocumentation";
-import { detectClassesAndFunctions, resolveCrossFileDependencies } from '../detector';
+import { detectClassesAndFunctions, resolveCrossFileDependencies } from '../utils/detector/detector';
 import { transformToReactFlowData } from '../utils/transformToReactFlowData'; // Import the transformation utility
 const { ipcRenderer } = require('electron');
 const fs = window.require('fs');

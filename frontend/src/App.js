@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import { Button, Container, TextField, Select, MenuItem, Typography, Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer';
-import { initializeParser } from './detector';
+import { initializeParser } from './utils/detector/detector';
 import Header from './components/layout/Header'; // Importing the new Header component
 
 

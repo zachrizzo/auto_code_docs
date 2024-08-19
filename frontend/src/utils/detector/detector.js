@@ -1,4 +1,5 @@
 import * as Parser from 'web-tree-sitter';
+import JsDetectionHandler from './js/main';
 
 let parsers = {};
 let globalResults = {}; // To store parsed results for all files
@@ -26,16 +27,6 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         await initializeParser();
     }
 
-    const parser = new Parser();
-    parser.setLanguage(parsers[language]);
-
-    const tree = parser.parse(code);
-    const cursor = tree.walk();
-
-    const processedFunctions = new Set();
-
-    currentAnalysisId++; // Increment for each new analysis
-
     const results = {
         fileName,
         classes: [],
@@ -46,8 +37,22 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         allDeclarations: {},
         recursiveRelationships: [],
         analysisId: currentAnalysisId,
-        rootFunctionIds: []  // New array to store root-level function IDs
+        rootFunctionIds: []
     };
+
+    const parser = new Parser();
+    const jsDetectionHandler = new JsDetectionHandler(parser, results, processedFunctions, currentAnalysisId);
+
+    parser.setLanguage(parsers[language]);
+
+    const tree = parser.parse(code);
+    const cursor = tree.walk();
+
+    const processedFunctions = new Set();
+
+    currentAnalysisId++; // Increment for each new analysis
+
+
 
     function addDeclaration(name, type, path, code) {
         const id = generateUniqueId();
@@ -90,62 +95,31 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         });
     }
 
-    function traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
-        do {
-            const node = cursor.currentNode;
-            const type = node.type;
-
-            if (
-                type === 'function_declaration' ||
-                type === 'function' ||
-                type === 'arrow_function' ||
-                type === 'generator_function' ||
-                type === 'async_function'
-            ) {
-                let functionName = node.childForFieldName('name')?.text;
-                if (!functionName && (type === 'arrow_function' || type === 'function')) {
-                    const parent = node.parent;
-                    if (parent.type === 'variable_declarator') {
-                        functionName = parent.childForFieldName('name')?.text;
-                    }
-                }
-                if (functionName && !processedFunctions.has(functionName)) {
-                    const path = `${parentPath}${functionName}`;
-                    const id = addDeclaration(functionName, 'function', path, node.text);
-                    if (id) {
-                        results.functions.push({ id, parentFunctionId: currentFunctionId });
-                        results.directRelationships[id] = [];
-                        results.indirectRelationships[id] = [];
-
-                        // If this function is at the root level (no parent function or class)
-                        if (!currentFunctionId && !parentId) {
-                            results.rootFunctionIds.push(id);
-                        }
-
-                        if (currentFunctionId) {
-                            results.directRelationships[currentFunctionId].push(id);
-                        } else if (parentId) {
-                            results.directRelationships[parentId].push(id);
-                        }
-                        analyzeMethodBody(node, id, results);
-                        processedFunctions.add(functionName);
-
-                        if (cursor.gotoFirstChild()) {
-                            traverse(cursor, `${path}-`, parentId, id);
-                            cursor.gotoParent();
-                        }
-                    }
-                }
-
-            } else if (cursor.gotoFirstChild()) {
-                traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
-                cursor.gotoParent();
-            }
-        } while (cursor.gotoNextSibling());
-    }
 
 
-    traverse(cursor);
+    // function traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
+    //     do {
+    //         const node = cursor.currentNode;
+    //         const type = node.type;
+
+    //         if (
+    //             type === 'function_declaration' ||
+    //             type === 'function' ||
+    //             type === 'arrow_function' ||
+    //             type === 'generator_function' ||
+    //             type === 'async_function'
+    //         ) {
+    //             jsDetectionHandler.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
+
+    //         } else if (cursor.gotoFirstChild()) {
+    //             traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
+    //             cursor.gotoParent();
+    //         }
+    //     } while (cursor.gotoNextSibling());
+    // }
+
+
+    jsDetectionHandler.traverse(cursor);
 
     // Update globalResults
     if (!globalResults[fileName]) {
