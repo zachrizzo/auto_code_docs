@@ -104,15 +104,14 @@ export async function transformToReactFlowData(parsedData) {
     // Second pass: Create all edges
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         const fileNodeId = `file-${fileName}`;
-        const allDeclarations = fileData.allDeclarations || {};
         const directRelationships = fileData.directRelationships || {};
         const indirectRelationships = fileData.indirectRelationships || {};
+        const rootFunctionIds = fileData.rootFunctionIds || [];
 
-        // Add edges from file to declarations only if they don't have direct relationships
-        for (const id of Object.keys(allDeclarations)) {
-            if (!directRelationships[id] || directRelationships[id].length === 0) {
-                safeAddEdge(fileNodeId, id);
-            }
+        for (const id of rootFunctionIds) {
+
+            safeAddEdge(fileNodeId, id);
+
         }
 
 

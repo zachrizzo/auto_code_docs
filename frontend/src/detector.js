@@ -45,7 +45,8 @@ export async function detectClassesAndFunctions(language, code, fileName) {
         crossFileRelationships: {},
         allDeclarations: {},
         recursiveRelationships: [],
-        analysisId: currentAnalysisId
+        analysisId: currentAnalysisId,
+        rootFunctionIds: []  // New array to store root-level function IDs
     };
 
     function addDeclaration(name, type, path, code) {
@@ -94,27 +95,8 @@ export async function detectClassesAndFunctions(language, code, fileName) {
             const node = cursor.currentNode;
             const type = node.type;
 
-            if (type === 'class_declaration' || type === 'class' || type === 'class_expression') {
-                const className = node.childForFieldName('name')?.text;
-                if (className) {
-                    const path = `${parentPath}${className}`;
-                    const id = addDeclaration(className, 'class', path, node.text);
-                    if (id) {
-                        results.classes.push({ id });
-                        results.directRelationships[id] = [];
-                        results.indirectRelationships[id] = [];
-                        if (parentId) {
-                            results.directRelationships[parentId].push(id);
-                        }
-                        if (cursor.gotoFirstChild()) {
-                            traverse(cursor, `${path}-`, id, currentFunctionId);
-                            cursor.gotoParent();
-                        }
-                    }
-                }
-            } else if (
+            if (
                 type === 'function_declaration' ||
-                type === 'method_definition' ||
                 type === 'function' ||
                 type === 'arrow_function' ||
                 type === 'generator_function' ||
@@ -134,6 +116,12 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                         results.functions.push({ id, parentFunctionId: currentFunctionId });
                         results.directRelationships[id] = [];
                         results.indirectRelationships[id] = [];
+
+                        // If this function is at the root level (no parent function or class)
+                        if (!currentFunctionId && !parentId) {
+                            results.rootFunctionIds.push(id);
+                        }
+
                         if (currentFunctionId) {
                             results.directRelationships[currentFunctionId].push(id);
                         } else if (parentId) {
@@ -148,6 +136,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
                         }
                     }
                 }
+
             } else if (cursor.gotoFirstChild()) {
                 traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
                 cursor.gotoParent();
