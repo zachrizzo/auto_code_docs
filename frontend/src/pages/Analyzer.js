@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Button, Container, Select, MenuItem, Typography, Box } from '@mui/material';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
-import CodeFlowChart from '../components/analyzer/mindMap';
+import CodeFlowChart from '../components/analyzer/mindMap/mindMap';
 import { getAIDescription } from "../api/CodeDocumentation";
 import { detectClassesAndFunctions, resolveCrossFileDependencies } from '../detector';
 import { transformToReactFlowData } from '../utils/transformToReactFlowData'; // Import the transformation utility
@@ -78,18 +78,37 @@ const Analyzer = () => {
             return;
         }
 
-        const [fileName, entityName] = nodeId.split('-');
+        let fileName, entityName, nodeData;
 
-        if (!results[fileName]) {
-            console.error(`File ${fileName} not found in results.`);
+        // Check if this is a file node
+        if (nodeId.startsWith('file-')) {
+            fileName = nodeId.substring(5); // Remove 'file-' prefix
+            entityName = 'file';
+        } else {
+            // This is a declaration node
+            // Find the file that contains this declaration
+            for (const [file, fileData] of Object.entries(results)) {
+                if (fileData.allDeclarations && fileData.allDeclarations[nodeId]) {
+                    fileName = file;
+                    entityName = fileData.allDeclarations[nodeId].name;
+                    break;
+                }
+            }
+        }
+
+        if (!fileName || !results[fileName]) {
+            console.error(`File not found for nodeId: ${nodeId}`);
             setAIDescriptions((prev) => ({ ...prev, [nodeId]: "File data not found." }));
             return;
         }
 
         const fileResults = results[fileName];
-        let nodeData = null;
 
-        nodeData = fileResults.functions.find(func => func.name === entityName);
+        if (entityName === 'file') {
+            nodeData = { name: fileName, code: fileResults.code || '' };
+        } else {
+            nodeData = fileResults.allDeclarations[nodeId];
+        }
 
         if (!nodeData) {
             console.error(`Node data not found for nodeId: ${nodeId}`);
@@ -99,7 +118,7 @@ const Analyzer = () => {
 
         if (!aiDescriptions[nodeId]) {
             try {
-                const description = await getAIDescription(entityName, nodeData.code);
+                const description = await getAIDescription(nodeData.name, nodeData.code);
                 setAIDescriptions((prev) => ({ ...prev, [nodeId]: description }));
             } catch (error) {
                 console.error("Error fetching AI description:", error);

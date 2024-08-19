@@ -69,6 +69,7 @@ class Application {
             return this.calculator.calculate('add', a, b);
         }
 
+
         result();
 
         console.log("Addition:", this.calculator.calculate('add', a, b));

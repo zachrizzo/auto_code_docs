@@ -188,88 +188,95 @@ export async function detectClassesAndFunctions(language, code, fileName) {
 
     return results;
 }
-
 export function resolveCrossFileDependencies() {
     const resolvedResults = JSON.parse(JSON.stringify(globalResults));
 
-    const allExports = {};
+    // Create a global map of all functions
+    const allFunctions = new Map();
     for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
-        if (fileResults.exports) {
-            for (const exportName of Object.keys(fileResults.exports)) {
-                allExports[exportName] = fileName;
+        fileResults.functions?.forEach(func => {
+            const declaration = fileResults.allDeclarations[func.id];
+            if (declaration) {
+                allFunctions.set(declaration.name, { id: declaration.id, fileName });
             }
-        }
+        });
+        // Include class methods as well
+        fileResults.classes?.forEach(cls => {
+            const classDeclaration = fileResults.allDeclarations[cls.id];
+            if (classDeclaration) {
+                Object.values(fileResults.allDeclarations)
+                    .filter(decl => decl.path && decl.path.startsWith(`${classDeclaration.path}-`) && decl.type === 'function')
+                    .forEach(method => {
+                        allFunctions.set(method.name, { id: method.id, fileName });
+                    });
+            }
+        });
     }
 
+    // Resolve cross-file relationships
     for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
         fileResults.crossFileRelationships = {};
 
-        const checkForCalls = (entity, entityName, entityType) => {
+        const checkForCalls = (entity, entityId, entityType) => {
             if (!entity || !entity.code) return;
             const calls = entity.code.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
             calls.forEach(call => {
                 const callName = call.trim().slice(0, -1);
-                if (allExports[callName] && allExports[callName] !== fileName) {
+                const calledFunction = allFunctions.get(callName);
+                if (calledFunction && calledFunction.fileName !== fileName) {
                     if (!fileResults.crossFileRelationships[entityType]) {
                         fileResults.crossFileRelationships[entityType] = {};
                     }
-                    if (!fileResults.crossFileRelationships[entityType][entityName]) {
-                        fileResults.crossFileRelationships[entityType][entityName] = {};
+                    if (!fileResults.crossFileRelationships[entityType][entityId]) {
+                        fileResults.crossFileRelationships[entityType][entityId] = [];
                     }
-                    fileResults.crossFileRelationships[entityType][entityName][callName] = allExports[callName];
+                    if (!fileResults.crossFileRelationships[entityType][entityId].includes(calledFunction.id)) {
+                        fileResults.crossFileRelationships[entityType][entityId].push(calledFunction.id);
+                    }
                 }
             });
         };
 
         // Check functions
-        if (Array.isArray(fileResults.functions)) {
-            fileResults.functions.forEach(func => {
-                if (func && func.id) {
-                    const funcDeclaration = fileResults.allDeclarations[func.id];
-                    if (funcDeclaration && funcDeclaration.name) {
-                        checkForCalls(funcDeclaration, funcDeclaration.name, 'functions');
-                    }
-                }
-            });
-        }
+        fileResults.functions?.forEach(func => {
+            const funcDeclaration = fileResults.allDeclarations[func.id];
+            if (funcDeclaration) {
+                checkForCalls(funcDeclaration, funcDeclaration.id, 'functions');
+            }
+        });
 
-        // Check classes
-        if (Array.isArray(fileResults.classes)) {
-            fileResults.classes.forEach(cls => {
-                if (cls && cls.id) {
-                    const classDeclaration = fileResults.allDeclarations[cls.id];
-                    if (classDeclaration && classDeclaration.name) {
-                        Object.values(fileResults.allDeclarations)
-                            .filter(decl => decl && decl.path && classDeclaration.path &&
-                                decl.path.startsWith(`${classDeclaration.path}-`) &&
-                                decl.type === 'function')
-                            .forEach(method => {
-                                if (method && method.name) {
-                                    checkForCalls(method, method.name, `classes.${classDeclaration.name}.methods`);
-                                }
-                            });
-                    }
-                }
-            });
-        }
+        // Check classes and their methods
+        fileResults.classes?.forEach(cls => {
+            const classDeclaration = fileResults.allDeclarations[cls.id];
+            if (classDeclaration) {
+                Object.values(fileResults.allDeclarations)
+                    .filter(decl => decl.path && decl.path.startsWith(`${classDeclaration.path}-`) && decl.type === 'function')
+                    .forEach(method => {
+                        checkForCalls(method, method.id, `classes.${classDeclaration.name}.methods`);
+                    });
+            }
+        });
 
         // Check indirect relationships
         if (fileResults.indirectRelationships) {
             Object.entries(fileResults.indirectRelationships).forEach(([funcId, calls]) => {
                 const funcDeclaration = fileResults.allDeclarations[funcId];
-                if (funcDeclaration && funcDeclaration.name) {
+                if (funcDeclaration) {
                     calls.forEach(callId => {
                         const callDeclaration = fileResults.allDeclarations[callId];
-                        if (callDeclaration && callDeclaration.name &&
-                            allExports[callDeclaration.name] &&
-                            allExports[callDeclaration.name] !== fileName) {
-                            if (!fileResults.crossFileRelationships.indirectRelationships) {
-                                fileResults.crossFileRelationships.indirectRelationships = {};
+                        if (callDeclaration) {
+                            const calledFunction = allFunctions.get(callDeclaration.name);
+                            if (calledFunction && calledFunction.fileName !== fileName) {
+                                if (!fileResults.crossFileRelationships.indirectRelationships) {
+                                    fileResults.crossFileRelationships.indirectRelationships = {};
+                                }
+                                if (!fileResults.crossFileRelationships.indirectRelationships[funcId]) {
+                                    fileResults.crossFileRelationships.indirectRelationships[funcId] = [];
+                                }
+                                if (!fileResults.crossFileRelationships.indirectRelationships[funcId].includes(calledFunction.id)) {
+                                    fileResults.crossFileRelationships.indirectRelationships[funcId].push(calledFunction.id);
+                                }
                             }
-                            if (!fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name]) {
-                                fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name] = {};
-                            }
-                            fileResults.crossFileRelationships.indirectRelationships[funcDeclaration.name][callDeclaration.name] = allExports[callDeclaration.name];
                         }
                     });
                 }
