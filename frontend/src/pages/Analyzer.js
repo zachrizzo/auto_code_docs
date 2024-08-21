@@ -14,7 +14,7 @@ const Analyzer = () => {
     const [results, setResults] = useState({});
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
-    const [watchingDir, setWatchingDir] = useState(null);
+    const [watchingDir, setWatchingDir] = useState('/Users/zachrizzo/programing/auto_code_docs_app/frontend/src');
     const [viewMode, setViewMode] = useState('map');
 
     const handleAnalyze = useCallback(async () => {
@@ -28,7 +28,7 @@ const Analyzer = () => {
         const analyzeFile = async (filePath) => {
             const fileContent = fs.readFileSync(filePath, 'utf8');
             const fileName = path.basename(filePath);
-            const analysisResults = await detectClassesAndFunctions(language, fileContent, fileName);
+            const analysisResults = await detectClassesAndFunctions(language, fileContent, filePath, watchingDir);
 
             console.log(`Analysis results for ${fileName}:`, analysisResults);
 

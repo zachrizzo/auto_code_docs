@@ -8,11 +8,15 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 import os
+from langchain_community.embeddings import OllamaEmbeddings
+
 
 load_dotenv()
 
 # Initialize the FastAPI app
 app = FastAPI()
+
+ollama_model = 'llama3:8b-instruct-q6_K'
 
 # Add CORS middleware to allow cross-origin requests
 app.add_middleware(
@@ -30,9 +34,16 @@ class GenerateDocsRequest(BaseModel):
 class GenerateDocsResponse(BaseModel):
     documentation: str
 
+# Define the request and response models
+class GetEmbeddingsRequest(BaseModel):
+    text: str
+
+class GetEmbeddingsResponse(BaseModel):
+    embeddings: List[float]
+
 # Define the Ollama LLM and prompt for documentation generation
 llm = ChatOllama(
-    model="llama3:8b-instruct-q6_K",
+    model=ollama_model,
     temperature=0,
 )
 
@@ -48,8 +59,10 @@ doc_prompt = PromptTemplate(
 
 doc_chain = doc_prompt | llm | StrOutputParser()
 
+ollama_emb = OllamaEmbeddings(model=ollama_model)  # Replace with your desired model
+
+
 # Define the endpoint to generate documentation
-@app.post("/generate-docs", response_model=GenerateDocsResponse)
 @app.post("/generate-docs", response_model=GenerateDocsResponse)
 async def generate_docs(request: GenerateDocsRequest):
     try:
@@ -78,6 +91,17 @@ async def generate_docs(request: GenerateDocsRequest):
         print("Error occurred:", str(e))  # Debugging log
         raise HTTPException(status_code=500, detail=str(e))
 
+#get embeddings
+@app.post("/get-embeddings", response_model=GetEmbeddingsResponse)
+async def get_embeddings(request: GetEmbeddingsRequest):
+    try:
+        # Generate embeddings using the Ollama model
+        embeddings = ollama_emb.embed_query(request.text)
+
+        # Return the embeddings in the response
+        return GetEmbeddingsResponse(embeddings=embeddings)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Sample root endpoint
 @app.get("/")

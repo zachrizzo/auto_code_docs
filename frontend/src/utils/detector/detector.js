@@ -22,7 +22,7 @@ export async function initializeParser() {
     parsers.javascript = JavaScript;
 }
 
-export async function detectClassesAndFunctions(language, code, fileName) {
+export async function detectClassesAndFunctions(language, code, fileName, watchedDir) {
     if (!parsers[language]) {
         await initializeParser();
     }
@@ -41,7 +41,7 @@ export async function detectClassesAndFunctions(language, code, fileName) {
     };
 
     const parser = new Parser();
-    const jsDetectionHandler = new JsDetectionHandler(parser, results, processedFunctions, currentAnalysisId);
+    const jsDetectionHandler = new JsDetectionHandler(parser, results, processedFunctions, currentAnalysisId, watchedDir, fileName);
 
     parser.setLanguage(parsers[language]);
 
@@ -94,29 +94,6 @@ export async function detectClassesAndFunctions(language, code, fileName) {
             }
         });
     }
-
-
-
-    // function traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
-    //     do {
-    //         const node = cursor.currentNode;
-    //         const type = node.type;
-
-    //         if (
-    //             type === 'function_declaration' ||
-    //             type === 'function' ||
-    //             type === 'arrow_function' ||
-    //             type === 'generator_function' ||
-    //             type === 'async_function'
-    //         ) {
-    //             jsDetectionHandler.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
-
-    //         } else if (cursor.gotoFirstChild()) {
-    //             traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
-    //             cursor.gotoParent();
-    //         }
-    //     } while (cursor.gotoNextSibling());
-    // }
 
 
     jsDetectionHandler.traverse(cursor);

@@ -9,8 +9,8 @@ async function createWindow() {
     const isDev = (await import('electron-is-dev')).default;
 
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
+        width: 1500,
+        height: 1000,
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false

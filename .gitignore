@@ -1,3 +1,5 @@
 .env
 frontend/node_modules
 backend/app/__pycache__
+
+frontend/src/.DS_Store

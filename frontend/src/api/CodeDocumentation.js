@@ -12,3 +12,18 @@ export async function getAIDescription(nodeId, code) {
         return `Failed to generate documentation for ${nodeId}.`;
     }
 }
+
+export async function getEmbeddings(text) {
+    const response = await fetch('http://localhost:8000/get-embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        return data.embeddings;
+    } else {
+        return [];
+    }
+}
