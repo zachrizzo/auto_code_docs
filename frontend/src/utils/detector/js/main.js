@@ -1,14 +1,31 @@
 import crypto from 'crypto';
+import path from 'path';
 
 class JsDetectionHandler {
-    constructor(parser, results, processedFunctions, currentAnalysisId) {
+    constructor(parser, results, processedFunctions, currentAnalysisId, watchedDir, currentFile) {
         this.parser = parser;
         this.results = results;
         this.processedFunctions = processedFunctions || new Set();
         this.currentAnalysisId = currentAnalysisId;
+        this.watchedDir = watchedDir;
+        this.currentFile = currentFile;
+        this.importedModules = new Set();
+    }
+
+    isInWatchedDir(filePath) {
+        const relativePath = path.relative(this.watchedDir, filePath);
+        return relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
     }
 
     addDeclaration(name, type, path, code) {
+        if (!this.isInWatchedDir(this.currentFile)) {
+            return null;
+        }
+
+        if (this.importedModules.has(name)) {
+            return null;
+        }
+
         const id = this.generateUniqueId(code);
         const declaration = {
             id,
@@ -16,7 +33,8 @@ class JsDetectionHandler {
             type,
             path,
             code,
-            analysisId: this.currentAnalysisId
+            analysisId: this.currentAnalysisId,
+            file: this.currentFile
         };
         this.results.allDeclarations[id] = declaration;
         console.log('Declaration added:', declaration);
@@ -27,17 +45,36 @@ class JsDetectionHandler {
         return crypto.createHash('sha256').update(code).digest('hex');
     }
 
+    detectImport(node) {
+        const importSource = node.childForFieldName('source')?.text;
+        if (importSource) {
+            const importSpecifiers = node.childForFieldName('specifiers');
+            if (importSpecifiers) {
+                importSpecifiers.children.forEach(specifier => {
+                    const importedName = specifier.childForFieldName('local')?.text;
+                    if (importedName) {
+                        this.importedModules.add(importedName);
+                    }
+                });
+            }
+        }
+    }
+
     detectFunction(node, parentPath, parentId, currentFunctionId, cursor) {
         let functionName = node.childForFieldName('name')?.text;
+
+        // Handle anonymous functions and arrow functions
         if (!functionName && (node.type === 'arrow_function' || node.type === 'function')) {
             const parent = node.parent;
             if (parent.type === 'variable_declarator') {
                 functionName = parent.childForFieldName('name')?.text;
             }
         }
-        if (functionName && (!this.processedFunctions || !this.processedFunctions.has(functionName))) {
+
+        if (functionName && !this.importedModules.has(functionName) && !this.processedFunctions.has(functionName) && this.isInWatchedDir(this.currentFile)) {
             const path = `${parentPath}${functionName}`;
             const id = this.addDeclaration(functionName, 'function', path, node.text);
+
             if (id) {
                 this.results.functions.push({ id, parentFunctionId: currentFunctionId });
                 this.results.directRelationships[id] = [];
@@ -55,19 +92,18 @@ class JsDetectionHandler {
                     this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
                     this.results.directRelationships[parentId].push(id);
                 }
+
                 this.analyzeMethodBody(node, id, this.results);
 
-                if (!this.processedFunctions) {
-                    this.processedFunctions = new Set();
-                }
                 this.processedFunctions.add(functionName);
 
                 if (cursor.gotoFirstChild()) {
                     this.traverse(cursor, `${path}-`, parentId, id);
                     cursor.gotoParent();
                 }
+
+                return id;
             }
-            return id;
         }
         return null;
     }
@@ -120,11 +156,16 @@ class JsDetectionHandler {
 
     detectJSXElement(node, parentPath, parentId, currentFunctionId) {
         const componentName = node.childForFieldName('name')?.text;
-        if (componentName && !this.processedFunctions.has(componentName)) {
-            const path = `${parentPath}${componentName}`;
-            const id = this.addDeclaration(componentName, 'component', path, node.text);
-            this.addToResults(id, currentFunctionId, parentId, path);
-            this.processedFunctions.add(componentName);
+        if (componentName && !this.importedModules.has(componentName) && !this.processedFunctions.has(componentName) && this.isInWatchedDir(this.currentFile)) {
+            // Only proceed if it's a custom component (starts with uppercase)
+            if (componentName[0] === componentName[0].toUpperCase()) {
+                const path = `${parentPath}${componentName}`;
+                const id = this.addDeclaration(componentName, 'component', path, node.text);
+                if (id) {
+                    this.addToResults(id, currentFunctionId, parentId, path);
+                    this.processedFunctions.add(componentName);
+                }
+            }
         }
     }
 
@@ -151,10 +192,27 @@ class JsDetectionHandler {
 
     detectReactHooks(node, parentPath, currentFunctionId) {
         const callName = node.childForFieldName('function')?.text;
-        if (callName && callName.startsWith('use')) {
-            const id = this.addDeclaration(callName, 'hook', parentPath, node.text);
-            this.addToResults(id, currentFunctionId, null, parentPath);
+        if (callName && callName.startsWith('use') && !this.importedModules.has(callName) && this.isInWatchedDir(this.currentFile)) {
+            // Only detect custom hooks defined in the project
+            // Check if the hook is defined in the current file
+            const hookDefinition = this.findHookDefinition(callName);
+            if (hookDefinition) {
+                const path = `${parentPath}${callName}`;
+                const id = this.addDeclaration(callName, 'custom_hook', path, hookDefinition);
+                if (id) {
+                    this.results.hooks = this.results.hooks || [];
+                    this.results.hooks.push({ id, parentFunctionId: currentFunctionId });
+                    this.addToResults(id, currentFunctionId, null, path);
+                }
+            }
         }
+    }
+
+    findHookDefinition(hookName) {
+        // This method should search the current file for the hook definition
+        // For simplicity, we'll just return null here. In a real implementation,
+        // you'd search the AST for the function definition.
+        return null;
     }
 
     detectHOC(node, parentPath, currentFunctionId) {
@@ -218,47 +276,54 @@ class JsDetectionHandler {
             const node = cursor.currentNode;
             const type = node.type;
 
-            if (
-                type === 'function_declaration' ||
-                type === 'function' ||
-                type === 'arrow_function' ||
-                type === 'generator_function' ||
-                type === 'async_function' ||
-                type === 'method_definition' // Detect class methods
-            ) {
-                this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
+            // Always process import statements to track imported modules
+            if (type === 'import_statement') {
+                this.detectImport(node);
+            }
+            // Only process other node types if we're in the watched directory
+            else if (this.isInWatchedDir(this.currentFile)) {
+                switch (type) {
+                    case 'function_declaration':
+                    case 'function':
+                    case 'arrow_function':
+                    case 'generator_function':
+                    case 'async_function':
+                    case 'method_definition':
+                        const functionId = this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
+                        if (functionId) {
+                            currentFunctionId = functionId; // Update current function ID for nested scopes
+                        }
+                        break;
 
-            } else if (type === 'class_declaration') {
-                this.detectClass(node, parentPath, parentId);
+                    case 'class_declaration':
+                        this.detectClass(node, parentPath, parentId);
+                        break;
 
-            } else if (type === 'method_definition') {
-                this.detectClassMethod(node, parentPath, parentId);
+                    case 'jsx_element':
+                        this.detectJSXElement(node, parentPath, parentId, currentFunctionId);
+                        break;
 
-            } else if (type === 'jsx_element') {
-                this.detectJSXElement(node, parentPath, parentId, currentFunctionId);
+                    case 'call_expression':
+                        const callName = node.childForFieldName('function')?.text;
+                        if (callName) {
+                            if (callName.startsWith('use')) {
+                                this.detectReactHooks(node, parentPath, currentFunctionId);
+                            } else if (this.isComponent(callName)) {
+                                this.detectHOC(node, parentPath, currentFunctionId);
+                            } else if (node.text.includes('import(')) {
+                                this.detectDynamicImport(node, parentPath, currentFunctionId);
+                            } else if (callName === 'addEventListener') {
+                                this.detectEventListener(node, parentPath, currentFunctionId);
+                            } else if (callName === 'then') {
+                                this.detectPromiseCallbacks(node, parentPath, currentFunctionId);
+                            }
+                        }
+                        break;
+                }
+            }
 
-            } else if (type === 'arrow_function' || type === 'function') {
-                this.detectReactFunctionalComponent(node, parentPath, parentId, currentFunctionId);
-
-            } else if (type === 'class_declaration') {
-                this.detectReactClassComponent(node, parentPath, parentId);
-
-            } else if (type === 'call_expression' && node.text.includes('use')) {
-                this.detectReactHooks(node, parentPath, currentFunctionId);
-
-            } else if (type === 'call_expression' && this.isComponent(node.childForFieldName('function')?.text)) {
-                this.detectHOC(node, parentPath, currentFunctionId);
-
-            } else if (type === 'call_expression' && node.text.includes('import(')) {
-                this.detectDynamicImport(node, parentPath, currentFunctionId);
-
-            } else if (type === 'call_expression' && node.text.includes('addEventListener')) {
-                this.detectEventListener(node, parentPath, currentFunctionId);
-
-            } else if (type === 'call_expression' && node.text.includes('.then')) {
-                this.detectPromiseCallbacks(node, parentPath, currentFunctionId);
-
-            } else if (cursor.gotoFirstChild()) {
+            // Recursively traverse child nodes
+            if (cursor.gotoFirstChild()) {
                 this.traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
                 cursor.gotoParent();
             }
