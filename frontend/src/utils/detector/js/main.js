@@ -5,11 +5,19 @@ class JsDetectionHandler {
     constructor(parser, results, processedFunctions, currentAnalysisId, watchedDir, currentFile) {
         this.parser = parser;
         this.results = results;
+        this.results.methods = this.results.methods || []; // Initialize methods array
+        this.results.functions = this.results.functions || []; // Initialize functions array
+        this.results.classes = this.results.classes || []; // Initialize classes array
+        this.results.directRelationships = this.results.directRelationships || {}; // Initialize directRelationships
+        this.results.indirectRelationships = this.results.indirectRelationships || {}; // Initialize indirectRelationships
+        this.results.rootFunctionIds = this.results.rootFunctionIds || []; // Initialize rootFunctionIds
         this.processedFunctions = processedFunctions || new Set();
         this.currentAnalysisId = currentAnalysisId;
         this.watchedDir = watchedDir;
         this.currentFile = currentFile;
         this.importedModules = new Set();
+        this.currentClassId = null
+
     }
 
     isInWatchedDir(filePath) {
@@ -73,33 +81,41 @@ class JsDetectionHandler {
 
         if (functionName && !this.importedModules.has(functionName) && !this.processedFunctions.has(functionName) && this.isInWatchedDir(this.currentFile)) {
             const path = `${parentPath}${functionName}`;
-            const id = this.addDeclaration(functionName, 'function', path, node.text);
+            const id = this.addDeclaration(functionName, node.type === 'method_definition' ? 'method' : 'function', path, node.text);
 
             if (id) {
-                this.results.functions.push({ id, parentFunctionId: currentFunctionId });
-                this.results.directRelationships[id] = [];
-                this.results.indirectRelationships[id] = [];
-
-                if (!currentFunctionId && !parentId) {
-                    this.results.rootFunctionIds = this.results.rootFunctionIds || [];
-                    this.results.rootFunctionIds.push(id);
-                }
-
-                if (currentFunctionId) {
-                    this.results.directRelationships[currentFunctionId] = this.results.directRelationships[currentFunctionId] || [];
-                    this.results.directRelationships[currentFunctionId].push(id);
-                } else if (parentId) {
+                if (node.type === 'method_definition') {
+                    console.log('classId', this.currentClassId)
+                    this.results.methods.push({ id, parentClassId: this.currentClassId });
                     this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
                     this.results.directRelationships[parentId].push(id);
+                } else {
+                    // This is a standalone function
+                    this.results.functions.push({ id, parentFunctionId: currentFunctionId });
+                    this.results.directRelationships[id] = [];
+                    this.results.indirectRelationships[id] = [];
+
+                    if (!currentFunctionId && !parentId) {
+                        this.results.rootFunctionIds.push(id);
+                    }
+
+                    if (currentFunctionId) {
+                        this.results.directRelationships[currentFunctionId] = this.results.directRelationships[currentFunctionId] || [];
+                        this.results.directRelationships[currentFunctionId].push(id);
+                    } else if (parentId) {
+                        this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
+                        this.results.directRelationships[parentId].push(id);
+                    }
                 }
 
                 this.analyzeMethodBody(node, id, this.results);
-
                 this.processedFunctions.add(functionName);
 
-                if (cursor.gotoFirstChild()) {
-                    this.traverse(cursor, `${path}-`, parentId, id);
-                    cursor.gotoParent();
+                // Recursively process the function body
+                const bodyNode = node.childForFieldName('body');
+                if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
+                    this.traverse(bodyNode.cursor, `${path}-`, parentId, id);
+                    bodyNode.cursor.gotoParent();
                 }
 
                 return id;
@@ -117,42 +133,27 @@ class JsDetectionHandler {
         if (className && (!this.processedFunctions || !this.processedFunctions.has(className))) {
             const path = `${parentPath}${className}`;
             const id = this.addDeclaration(className, 'class', path, node.text);
-            this.results.classes.push({ id });
-            this.addToResults(id, null, parentId, path);
 
-            this.processedFunctions.add(className);
+            if (id) {
+                this.currentClassId = id; // Add this line
 
-            const bodyNode = node.childForFieldName('body');
-            if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
-                this.traverse(bodyNode.cursor, `${path}-`, id);
-                bodyNode.cursor.gotoParent();
-            }
-            return id;
-        }
-        return null;
-    }
+                this.results.classes.push({ id });
+                this.results.directRelationships[id] = [];
+                this.processedFunctions.add(className);
 
-    detectClassMethod(node, parentPath, parentId) {
-        const methodName = node.childForFieldName('name')?.text;
-        if (methodName && (!this.processedFunctions || !this.processedFunctions.has(methodName))) {
-            const path = `${parentPath}${methodName}`;
-            const id = this.addDeclaration(methodName, 'method', path, node.text);
-            this.results.methods.push({ id, parentClassId: parentId });
-            this.addToResults(id, null, parentId, path);
-
-            this.processedFunctions.add(methodName);
-
-            if (node.childForFieldName('body')) {
-                const bodyCursor = node.childForFieldName('body').cursor;
-                if (bodyCursor.gotoFirstChild()) {
-                    this.traverse(bodyCursor, `${path}-`, parentId);
-                    bodyCursor.gotoParent();
+                const bodyNode = node.childForFieldName('body');
+                if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
+                    this.traverse(bodyNode.cursor, `${path}-`, id, id);
+                    bodyNode.cursor.gotoParent();
                 }
+                // this.currentClassId = null; // Reset after processing the class
+
+                return id;
             }
-            return id;
         }
         return null;
     }
+
 
     detectJSXElement(node, parentPath, parentId, currentFunctionId) {
         const componentName = node.childForFieldName('name')?.text;
@@ -253,8 +254,14 @@ class JsDetectionHandler {
         }
     }
 
-    addToResults(id, currentFunctionId, parentId, path) {
-        this.results.functions.push({ id, parentFunctionId: currentFunctionId });
+    addToResults(id, currentFunctionId, parentId, path, isMethod = false) {
+        if (isMethod) {
+            this.results.methods.push({ id, parentClassId: parentId });
+        } else {
+            this.results.functions.push({ id, parentFunctionId: currentFunctionId || parentId });
+        }
+
+        this.results.functions.push({ id, parentFunctionId: currentFunctionId || parentId });
         this.results.directRelationships[id] = [];
         this.results.indirectRelationships[id] = [];
         if (!currentFunctionId && !parentId) {
@@ -273,6 +280,8 @@ class JsDetectionHandler {
 
     traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
         do {
+            const previousClassId = this.currentClassId;
+
             const node = cursor.currentNode;
             const type = node.type;
 
@@ -290,13 +299,14 @@ class JsDetectionHandler {
                     case 'async_function':
                     case 'method_definition':
                         const functionId = this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
-                        if (functionId) {
-                            currentFunctionId = functionId; // Update current function ID for nested scopes
-                        }
+                        // Don't update currentFunctionId for method definitions
                         break;
 
                     case 'class_declaration':
                         this.detectClass(node, parentPath, parentId);
+                        break;
+                    case 'method_definition':
+                        this.detectFunction(node, parentPath, this.currentClassId, currentFunctionId, cursor);
                         break;
 
                     case 'jsx_element':
