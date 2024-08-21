@@ -4,7 +4,7 @@ class JsDetectionHandler {
     constructor(parser, results, processedFunctions, currentAnalysisId) {
         this.parser = parser;
         this.results = results;
-        this.processedFunctions = processedFunctions;
+        this.processedFunctions = processedFunctions || new Set();
         this.currentAnalysisId = currentAnalysisId;
     }
 
@@ -43,7 +43,6 @@ class JsDetectionHandler {
                 this.results.directRelationships[id] = [];
                 this.results.indirectRelationships[id] = [];
 
-                // If this function is at the root level (no parent function or class)
                 if (!currentFunctionId && !parentId) {
                     this.results.rootFunctionIds = this.results.rootFunctionIds || [];
                     this.results.rootFunctionIds.push(id);
@@ -66,6 +65,52 @@ class JsDetectionHandler {
                 if (cursor.gotoFirstChild()) {
                     this.traverse(cursor, `${path}-`, parentId, id);
                     cursor.gotoParent();
+                }
+            }
+            return id;
+        }
+        return null;
+    }
+
+    detectClass(node, parentPath, parentId) {
+        if (!node) {
+            return null;
+        }
+
+        const className = node.childForFieldName('name')?.text;
+        if (className && (!this.processedFunctions || !this.processedFunctions.has(className))) {
+            const path = `${parentPath}${className}`;
+            const id = this.addDeclaration(className, 'class', path, node.text);
+            this.results.classes.push({ id });
+            this.addToResults(id, null, parentId, path);
+
+            this.processedFunctions.add(className);
+
+            const bodyNode = node.childForFieldName('body');
+            if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
+                this.traverse(bodyNode.cursor, `${path}-`, id);
+                bodyNode.cursor.gotoParent();
+            }
+            return id;
+        }
+        return null;
+    }
+
+    detectClassMethod(node, parentPath, parentId) {
+        const methodName = node.childForFieldName('name')?.text;
+        if (methodName && (!this.processedFunctions || !this.processedFunctions.has(methodName))) {
+            const path = `${parentPath}${methodName}`;
+            const id = this.addDeclaration(methodName, 'method', path, node.text);
+            this.results.methods.push({ id, parentClassId: parentId });
+            this.addToResults(id, null, parentId, path);
+
+            this.processedFunctions.add(methodName);
+
+            if (node.childForFieldName('body')) {
+                const bodyCursor = node.childForFieldName('body').cursor;
+                if (bodyCursor.gotoFirstChild()) {
+                    this.traverse(bodyCursor, `${path}-`, parentId);
+                    bodyCursor.gotoParent();
                 }
             }
             return id;
@@ -116,7 +161,7 @@ class JsDetectionHandler {
         const callName = node.childForFieldName('function')?.text;
         if (callName && this.isComponent(callName)) {
             const wrappedComponent = node.childForFieldName('arguments')?.firstChild?.text;
-            if (wrappedComponent && this.processedFunctions.has(wrappedComponent)) {
+            if (wrappedComponent && (this.processedFunctions?.has(wrappedComponent) || false)) {
                 this.results.directRelationships[currentFunctionId].push(wrappedComponent);
             }
         }
@@ -178,9 +223,40 @@ class JsDetectionHandler {
                 type === 'function' ||
                 type === 'arrow_function' ||
                 type === 'generator_function' ||
-                type === 'async_function'
+                type === 'async_function' ||
+                type === 'method_definition' // Detect class methods
             ) {
                 this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
+
+            } else if (type === 'class_declaration') {
+                this.detectClass(node, parentPath, parentId);
+
+            } else if (type === 'method_definition') {
+                this.detectClassMethod(node, parentPath, parentId);
+
+            } else if (type === 'jsx_element') {
+                this.detectJSXElement(node, parentPath, parentId, currentFunctionId);
+
+            } else if (type === 'arrow_function' || type === 'function') {
+                this.detectReactFunctionalComponent(node, parentPath, parentId, currentFunctionId);
+
+            } else if (type === 'class_declaration') {
+                this.detectReactClassComponent(node, parentPath, parentId);
+
+            } else if (type === 'call_expression' && node.text.includes('use')) {
+                this.detectReactHooks(node, parentPath, currentFunctionId);
+
+            } else if (type === 'call_expression' && this.isComponent(node.childForFieldName('function')?.text)) {
+                this.detectHOC(node, parentPath, currentFunctionId);
+
+            } else if (type === 'call_expression' && node.text.includes('import(')) {
+                this.detectDynamicImport(node, parentPath, currentFunctionId);
+
+            } else if (type === 'call_expression' && node.text.includes('addEventListener')) {
+                this.detectEventListener(node, parentPath, currentFunctionId);
+
+            } else if (type === 'call_expression' && node.text.includes('.then')) {
+                this.detectPromiseCallbacks(node, parentPath, currentFunctionId);
 
             } else if (cursor.gotoFirstChild()) {
                 this.traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
