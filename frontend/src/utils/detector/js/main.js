@@ -1,4 +1,5 @@
-//JsDetectionHandler.js
+import crypto from 'crypto';
+
 class JsDetectionHandler {
     constructor(parser, results, processedFunctions, currentAnalysisId) {
         this.parser = parser;
@@ -8,7 +9,7 @@ class JsDetectionHandler {
     }
 
     addDeclaration(name, type, path, code) {
-        const id = this.generateUniqueId();
+        const id = this.generateUniqueId(code);
         const declaration = {
             id,
             name,
@@ -22,8 +23,8 @@ class JsDetectionHandler {
         return id;
     }
 
-    generateUniqueId() {
-        return Math.random().toString(36).substr(2, 9);
+    generateUniqueId(code) {
+        return crypto.createHash('sha256').update(code).digest('hex');
     }
 
     detectFunction(node, parentPath, parentId, currentFunctionId, cursor) {
