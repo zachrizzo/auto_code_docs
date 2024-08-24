@@ -5,20 +5,20 @@ class JsDetectionHandler {
     constructor(parser, results, processedFunctions, currentAnalysisId, watchedDir, currentFile) {
         this.parser = parser;
         this.results = results;
-        this.results.methods = this.results.methods || []; // Initialize methods array
-        this.results.functions = this.results.functions || []; // Initialize functions array
-        this.results.classes = this.results.classes || []; // Initialize classes array
-        this.results.directRelationships = this.results.directRelationships || {}; // Initialize directRelationships
-        this.results.indirectRelationships = this.results.indirectRelationships || {}; // Initialize indirectRelationships
-        this.results.rootFunctionIds = this.results.rootFunctionIds || []; // Initialize rootFunctionIds
+        this.results.methods = this.results.methods || [];
+        this.results.functions = this.results.functions || [];
+        this.results.classes = this.results.classes || [];
+        this.results.directRelationships = this.results.directRelationships || {};
+        this.results.rootFunctionIds = this.results.rootFunctionIds || [];
         this.processedFunctions = processedFunctions || new Set();
         this.currentAnalysisId = currentAnalysisId;
         this.watchedDir = watchedDir;
         this.currentFile = currentFile;
         this.importedModules = new Set();
-        this.currentClassId = null
-
+        this.currentClassId = null;
+        this.functionCalls = new Set();
     }
+
 
     isInWatchedDir(filePath) {
         const relativePath = path.relative(this.watchedDir, filePath);
@@ -71,7 +71,6 @@ class JsDetectionHandler {
     detectFunction(node, parentPath, parentId, currentFunctionId, cursor) {
         let functionName = node.childForFieldName('name')?.text;
 
-        // Handle anonymous functions and arrow functions
         if (!functionName && (node.type === 'arrow_function' || node.type === 'function')) {
             const parent = node.parent;
             if (parent.type === 'variable_declarator') {
@@ -85,15 +84,12 @@ class JsDetectionHandler {
 
             if (id) {
                 if (node.type === 'method_definition') {
-                    console.log('classId', this.currentClassId)
                     this.results.methods.push({ id, parentClassId: this.currentClassId });
                     this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
                     this.results.directRelationships[parentId].push(id);
                 } else {
-                    // This is a standalone function
                     this.results.functions.push({ id, parentFunctionId: currentFunctionId });
                     this.results.directRelationships[id] = [];
-                    this.results.indirectRelationships[id] = [];
 
                     if (!currentFunctionId && !parentId) {
                         this.results.rootFunctionIds.push(id);
@@ -111,7 +107,6 @@ class JsDetectionHandler {
                 this.analyzeMethodBody(node, id, this.results);
                 this.processedFunctions.add(functionName);
 
-                // Recursively process the function body
                 const bodyNode = node.childForFieldName('body');
                 if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
                     this.traverse(bodyNode.cursor, `${path}-`, parentId, id);
@@ -254,6 +249,62 @@ class JsDetectionHandler {
         }
     }
 
+    detectFunctionCall(node, currentFunctionId) {
+        const callName = node.childForFieldName('function')?.text;
+        if (callName) {
+            // Check if it's a method call
+            const objectName = node.childForFieldName('function')?.childForFieldName('object')?.text;
+            const fullCallName = objectName ? `${objectName}.${callName}` : callName;
+
+            // Ensure this.results.functionCalls is initialized as an object
+            if (!this.results.functionCalls) {
+                console.log("Initializing this.results.functionCalls as an empty object");
+                this.results.functionCalls = {};
+            }
+
+            // Check the type of this.results.functionCalls[fullCallName]
+            if (!this.results.functionCalls[fullCallName]) {
+                console.log(`Initializing this.results.functionCalls[${fullCallName}] as a Set`);
+                this.results.functionCalls[fullCallName] = new Set();
+            } else if (!(this.results.functionCalls[fullCallName] instanceof Set)) {
+                console.error(`Type Error: this.results.functionCalls[${fullCallName}] is not a Set`);
+                console.error(`Current value:`, this.results.functionCalls[fullCallName]);
+                return; // Stop further execution to prevent errors
+            }
+
+            // Add the currentFunctionId to the set
+            if (currentFunctionId) {
+                console.log(`Adding function ID ${currentFunctionId} to the set for ${fullCallName}`);
+                this.results.functionCalls[fullCallName].add(currentFunctionId);
+            } else {
+                // If there's no current function ID, it might be a top-level call
+                console.log(`Adding 'top-level' to the set for ${fullCallName}`);
+                this.results.functionCalls[fullCallName].add('top-level');
+            }
+
+            // Check for callback functions in the arguments
+            const args = node.childForFieldName('arguments');
+            if (args) {
+                args.children.forEach((arg, index) => {
+                    if (arg.type === 'function' || arg.type === 'arrow_function') {
+                        const callbackId = this.detectFunction(arg, `${fullCallName}-arg${index}-`, currentFunctionId, null, arg.cursor);
+                        if (callbackId) {
+                            if (!this.results.callbackRelationships) {
+                                this.results.callbackRelationships = {};
+                            }
+                            if (!this.results.callbackRelationships[fullCallName]) {
+                                this.results.callbackRelationships[fullCallName] = [];
+                            }
+                            this.results.callbackRelationships[fullCallName].push(callbackId);
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+
+
     addToResults(id, currentFunctionId, parentId, path, isMethod = false) {
         if (isMethod) {
             this.results.methods.push({ id, parentClassId: parentId });
@@ -261,36 +312,37 @@ class JsDetectionHandler {
             this.results.functions.push({ id, parentFunctionId: currentFunctionId || parentId });
         }
 
-        this.results.functions.push({ id, parentFunctionId: currentFunctionId || parentId });
         this.results.directRelationships[id] = [];
-        this.results.indirectRelationships[id] = [];
         if (!currentFunctionId && !parentId) {
             this.results.rootFunctionIds.push(id);
         }
         if (currentFunctionId) {
+            this.results.directRelationships[currentFunctionId] = this.results.directRelationships[currentFunctionId] || [];
             this.results.directRelationships[currentFunctionId].push(id);
         } else if (parentId) {
+            this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
             this.results.directRelationships[parentId].push(id);
         }
+        const functionName = this.results.allDeclarations[id].name;
+        if (this.results.functionCalls && this.results.functionCalls[functionName]) {
+            if (!this.results.functionCallRelationships) {
+                this.results.functionCallRelationships = {};
+            }
+            this.results.functionCallRelationships[id] = Array.from(this.results.functionCalls[functionName]);
+        }
     }
-
     analyzeMethodBody(node, id) {
         // Implement method body analysis logic here
     }
 
     traverse(cursor, parentPath = '', parentId = null, currentFunctionId = null) {
         do {
-            const previousClassId = this.currentClassId;
-
             const node = cursor.currentNode;
             const type = node.type;
 
-            // Always process import statements to track imported modules
             if (type === 'import_statement') {
                 this.detectImport(node);
-            }
-            // Only process other node types if we're in the watched directory
-            else if (this.isInWatchedDir(this.currentFile)) {
+            } else if (this.isInWatchedDir(this.currentFile)) {
                 switch (type) {
                     case 'function_declaration':
                     case 'function':
@@ -298,46 +350,32 @@ class JsDetectionHandler {
                     case 'generator_function':
                     case 'async_function':
                     case 'method_definition':
-                        const functionId = this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
-                        // Don't update currentFunctionId for method definitions
+                        currentFunctionId = this.detectFunction(node, parentPath, parentId, currentFunctionId, cursor);
                         break;
 
                     case 'class_declaration':
                         this.detectClass(node, parentPath, parentId);
                         break;
-                    case 'method_definition':
-                        this.detectFunction(node, parentPath, this.currentClassId, currentFunctionId, cursor);
-                        break;
-
-                    case 'jsx_element':
-                        this.detectJSXElement(node, parentPath, parentId, currentFunctionId);
-                        break;
 
                     case 'call_expression':
-                        const callName = node.childForFieldName('function')?.text;
-                        if (callName) {
-                            if (callName.startsWith('use')) {
-                                this.detectReactHooks(node, parentPath, currentFunctionId);
-                            } else if (this.isComponent(callName)) {
-                                this.detectHOC(node, parentPath, currentFunctionId);
-                            } else if (node.text.includes('import(')) {
-                                this.detectDynamicImport(node, parentPath, currentFunctionId);
-                            } else if (callName === 'addEventListener') {
-                                this.detectEventListener(node, parentPath, currentFunctionId);
-                            } else if (callName === 'then') {
-                                this.detectPromiseCallbacks(node, parentPath, currentFunctionId);
-                            }
-                        }
+                        this.detectFunctionCall(node, currentFunctionId);
                         break;
+
                 }
             }
 
-            // Recursively traverse child nodes
             if (cursor.gotoFirstChild()) {
                 this.traverse(cursor, `${parentPath}${node.type}-`, parentId, currentFunctionId);
                 cursor.gotoParent();
             }
+
         } while (cursor.gotoNextSibling());
+
+        if (this.results.functionCalls) {
+            for (const [key, value] of Object.entries(this.results.functionCalls)) {
+                this.results.functionCalls[key] = Array.from(value);
+            }
+        }
     }
 
     isComponent(callName) {

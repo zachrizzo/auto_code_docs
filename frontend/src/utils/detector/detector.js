@@ -6,10 +6,6 @@ let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
 
-// Function to generate unique IDs
-function generateUniqueId() {
-    return Math.random().toString(36).substr(2, 9);
-}
 
 export async function initializeParser() {
     await Parser.init({
@@ -54,47 +50,6 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
 
 
 
-    function addDeclaration(name, type, path, code) {
-        const id = generateUniqueId();
-        const declaration = {
-            id,
-            name,
-            type,
-            path,
-            code,
-            analysisId: currentAnalysisId
-        };
-        results.allDeclarations[id] = declaration;
-        globalDeclarations[name] = declaration;
-        console.log('Declaration added:', declaration);
-        return id;
-    }
-
-    function analyzeMethodBody(methodNode, parentId, results, depth = 0) {
-        if (!methodNode || !methodNode.text) {
-            return;
-        }
-
-        const functionCalls = methodNode.text.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
-        functionCalls.forEach(call => {
-            const callName = call.trim().slice(0, -1);
-            const calledId = Object.keys(results.allDeclarations).find(id => results.allDeclarations[id].name === callName);
-            if (calledId && calledId !== parentId) {
-                results.indirectRelationships[parentId] = results.indirectRelationships[parentId] || [];
-                if (!results.indirectRelationships[parentId].includes(calledId)) {
-                    results.indirectRelationships[parentId].push(calledId);
-
-                    if (depth < 3) {
-                        const calledFunction = results.allDeclarations[calledId];
-                        if (calledFunction && calledFunction.code) {
-                            analyzeMethodBody(calledFunction, calledId, results, depth + 1);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
 
     jsDetectionHandler.traverse(cursor);
 
@@ -128,6 +83,7 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
 
     return results;
 }
+
 export function resolveCrossFileDependencies() {
     const resolvedResults = JSON.parse(JSON.stringify(globalResults));
 
@@ -156,6 +112,7 @@ export function resolveCrossFileDependencies() {
     // Resolve cross-file relationships
     for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
         fileResults.crossFileRelationships = {};
+        fileResults.functionCallRelationships = {};
 
         const checkForCalls = (entity, entityId, entityType) => {
             if (!entity || !entity.code) return;
@@ -163,15 +120,26 @@ export function resolveCrossFileDependencies() {
             calls.forEach(call => {
                 const callName = call.trim().slice(0, -1);
                 const calledFunction = allFunctions.get(callName);
-                if (calledFunction && calledFunction.fileName !== fileName) {
-                    if (!fileResults.crossFileRelationships[entityType]) {
-                        fileResults.crossFileRelationships[entityType] = {};
+                if (calledFunction) {
+                    // Record all function calls
+                    if (!fileResults.functionCallRelationships[entityId]) {
+                        fileResults.functionCallRelationships[entityId] = [];
                     }
-                    if (!fileResults.crossFileRelationships[entityType][entityId]) {
-                        fileResults.crossFileRelationships[entityType][entityId] = [];
+                    if (!fileResults.functionCallRelationships[entityId].includes(calledFunction.id)) {
+                        fileResults.functionCallRelationships[entityId].push(calledFunction.id);
                     }
-                    if (!fileResults.crossFileRelationships[entityType][entityId].includes(calledFunction.id)) {
-                        fileResults.crossFileRelationships[entityType][entityId].push(calledFunction.id);
+
+                    // Record cross-file calls
+                    if (calledFunction.fileName !== fileName) {
+                        if (!fileResults.crossFileRelationships[entityType]) {
+                            fileResults.crossFileRelationships[entityType] = {};
+                        }
+                        if (!fileResults.crossFileRelationships[entityType][entityId]) {
+                            fileResults.crossFileRelationships[entityType][entityId] = [];
+                        }
+                        if (!fileResults.crossFileRelationships[entityType][entityId].includes(calledFunction.id)) {
+                            fileResults.crossFileRelationships[entityType][entityId].push(calledFunction.id);
+                        }
                     }
                 }
             });
@@ -219,6 +187,41 @@ export function resolveCrossFileDependencies() {
                             }
                         }
                     });
+                }
+            });
+        }
+
+        // Process existing functionCalls
+        if (fileResults.functionCalls) {
+            Object.entries(fileResults.functionCalls).forEach(([calledFuncId, callerFuncIds]) => {
+                const calledFuncDeclaration = fileResults.allDeclarations[calledFuncId];
+                if (calledFuncDeclaration) {
+                    const calledFunc = allFunctions.get(calledFuncDeclaration.name);
+                    if (calledFunc) {
+                        callerFuncIds.forEach(callerId => {
+                            const callerFuncDeclaration = fileResults.allDeclarations[callerId];
+                            if (callerFuncDeclaration) {
+                                if (!fileResults.functionCallRelationships[callerId]) {
+                                    fileResults.functionCallRelationships[callerId] = [];
+                                }
+                                if (!fileResults.functionCallRelationships[callerId].includes(calledFunc.id)) {
+                                    fileResults.functionCallRelationships[callerId].push(calledFunc.id);
+                                }
+
+                                if (calledFunc.fileName !== fileName) {
+                                    if (!fileResults.crossFileRelationships.functionCalls) {
+                                        fileResults.crossFileRelationships.functionCalls = {};
+                                    }
+                                    if (!fileResults.crossFileRelationships.functionCalls[callerId]) {
+                                        fileResults.crossFileRelationships.functionCalls[callerId] = [];
+                                    }
+                                    if (!fileResults.crossFileRelationships.functionCalls[callerId].includes(calledFunc.id)) {
+                                        fileResults.crossFileRelationships.functionCalls[callerId].push(calledFunc.id);
+                                    }
+                                }
+                            }
+                        });
+                    }
                 }
             });
         }

@@ -1,20 +1,18 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 
-
 const elk = new ELK();
-
 
 const layoutOptions = {
     'elk.algorithm': 'layered',
     'elk.direction': 'RIGHT',
-    'elk.spacing.nodeNode': '90',  // Increased from 40
-    'elk.layered.spacing.nodeNodeBetweenLayers': '200',  // Added this option
-    'elk.edgeRouting': 'ORTHOGONAL',  // Changed from default to reduce edge crossings
-    'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',  // Changed from SIMPLE for better placement
-    'elk.layered.spacing.edgeNodeBetweenLayers': '80',  // Increased from 40
-    'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',  // Added to maintain a logical order
-    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',  // Added to reduce crossings
-    'elk.layered.layering.strategy': 'LONGEST_PATH',  // Added to reduce edge length
+    'elk.spacing.nodeNode': '90',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '200',
+    'elk.edgeRouting': 'ORTHOGONAL',
+    'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+    'elk.layered.spacing.edgeNodeBetweenLayers': '80',
+    'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+    'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+    'elk.layered.layering.strategy': 'LONGEST_PATH',
 };
 
 export async function transformToReactFlowData(parsedData) {
@@ -27,6 +25,12 @@ export async function transformToReactFlowData(parsedData) {
         return { nodes, edges };
     }
 
+    // Function to get the file name from a path
+    const getFileName = (path) => {
+        const parts = path.split('/');
+        return parts[parts.length - 1];
+    };
+
     // First pass: Create all nodes
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         if (!fileData || typeof fileData !== 'object') {
@@ -34,11 +38,11 @@ export async function transformToReactFlowData(parsedData) {
             continue;
         }
 
-        const fileNodeId = `file-${fileName}`;
+        const fileNodeId = `file-${getFileName(fileName)}`;
         nodes.push({
             id: fileNodeId,
             data: {
-                label: fileName,
+                label: getFileName(fileName),
                 sourceHandles: [
                     { id: `${fileNodeId}-s-a` },
                     { id: `${fileNodeId}-s-b` },
@@ -54,7 +58,6 @@ export async function transformToReactFlowData(parsedData) {
             position: { x: 0, y: 0 }
         });
         nodeSet.add(fileNodeId);
-
 
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
@@ -86,14 +89,18 @@ export async function transformToReactFlowData(parsedData) {
             const sourceHandle = `${sourceId}-s-${String.fromCharCode(97 + (edges.length % 3))}`;
             const targetHandle = `${targetId}-t-${String.fromCharCode(97 + (edges.length % 3))}`;
             edges.push({
-                id: `${sourceId}-${targetId}${options.isIndirect ? '-indirect' : ''}${options.isCrossFile ? '-crossfile' : ''}`,
+                id: `${sourceId}-${targetId}${options.type ? `-${options.type}` : ''}`,
                 source: sourceId,
                 sourceHandle: sourceHandle,
                 target: targetId,
                 targetHandle: targetHandle,
-                animated: options.isIndirect || options.isCrossFile,
-                style: options.isIndirect ? { stroke: '#f6ab6c' } :
-                    options.isCrossFile ? { stroke: '#ff0000' } : {},
+                animated: options.type === 'call' || options.type === 'crossFileCall',
+                style: {
+                    stroke: options.type === 'call' ? '#ff0000' :
+                        options.type === 'crossFileCall' ? '#FBFF00' : '#FFFFFF',
+                    strokeWidth: 2,
+                    strokeDasharray: (options.type === 'call' || options.type === 'crossFileCall') ? '5,5' : 'none',
+                },
                 type: 'default'
             });
         } else {
@@ -102,34 +109,53 @@ export async function transformToReactFlowData(parsedData) {
     };
 
     // Second pass: Create all edges
+    // Second pass: Create all edges
     for (const [fileName, fileData] of Object.entries(parsedData)) {
-        const fileNodeId = `file-${fileName}`;
+        const fileNodeId = `file-${getFileName(fileName)}`;
         const directRelationships = fileData.directRelationships || {};
-        const indirectRelationships = fileData.indirectRelationships || {};
         const rootFunctionIds = fileData.rootFunctionIds || [];
 
+        // Add edges from file to root functions
         for (const id of rootFunctionIds) {
-
-            safeAddEdge(fileNodeId, id);
-
+            safeAddEdge(fileNodeId, id, { type: 'declaration' });
         }
 
-
-        // Add direct relationships
+        // Add direct relationships (function declarations)
         for (const [sourceId, targetIds] of Object.entries(directRelationships)) {
-            targetIds.forEach(targetId => safeAddEdge(sourceId, targetId));
+            if (Array.isArray(targetIds)) {
+                targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { type: 'declaration' }));
+            }
         }
 
-        // Add indirect relationships
-        for (const [sourceId, targetIds] of Object.entries(indirectRelationships)) {
-            targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { isIndirect: true }));
+        // Add edges for methods to their parent class
+        if (fileData.methods) {
+            fileData.methods.forEach(method => {
+                if (method.parentClassId) {
+                    safeAddEdge(method.parentClassId, method.id, { type: 'declaration' });
+                }
+            });
+        }
+
+        // Add edges for function calls within the same file
+        if (fileData.functionCalls) {
+            for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCalls)) {
+                if (Array.isArray(callerIds)) {
+                    callerIds.forEach(callerId => {
+                        if (callerId !== 'top-level') {
+                            safeAddEdge(callerId, calledFunctionId, { type: 'call' });
+                        }
+                    });
+                }
+            }
         }
 
         // Add cross-file relationships
         if (fileData.crossFileRelationships) {
             for (const [entityType, entities] of Object.entries(fileData.crossFileRelationships)) {
                 for (const [sourceId, targetIds] of Object.entries(entities)) {
-                    targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { isCrossFile: true }));
+                    if (Array.isArray(targetIds)) {
+                        targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }));
+                    }
                 }
             }
         }
@@ -140,7 +166,7 @@ export async function transformToReactFlowData(parsedData) {
         layoutOptions: layoutOptions,
         children: nodes.map((n) => ({
             id: n.id,
-            width: 200,
+            width: 300,
             height: 80,
             properties: {
                 'org.eclipse.elk.portConstraints': 'FIXED_SIDE',

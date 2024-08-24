@@ -7,7 +7,7 @@
     "build": "webpack",
     "dev": "webpack serve",
     "postinstall": "electron-rebuild -f -w tree-sitter tree-sitter-javascript",
-    "start-backend": "cd ../backend && python3 server.py"
+    "backend": "cd ../backend && python3 server.py"
   },
   "engines": {
     "node": ">=20.0.0"
