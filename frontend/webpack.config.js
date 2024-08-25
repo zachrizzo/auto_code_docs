@@ -42,5 +42,7 @@ module.exports = {
     plugins: [
         new ReactRefreshWebpackPlugin()
     ],
-    target: 'electron-renderer'
+    target: 'electron-renderer',
+    devtool: 'inline-source-map', // or 'source-map' for production
+
 };

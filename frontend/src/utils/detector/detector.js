@@ -165,6 +165,12 @@ export function resolveCrossFileDependencies() {
             }
         });
 
+        // Clean up any null keys in directRelationships
+        if (fileResults.directRelationships && 'null' in fileResults.directRelationships) {
+            console.warn(`Found 'null' key in directRelationships for file ${fileName}`);
+            delete fileResults.directRelationships['null'];
+        }
+
         // Ensure functionCallRelationships are arrays
         if (fileResults.functionCallRelationships) {
             for (const [key, value] of Object.entries(fileResults.functionCallRelationships)) {

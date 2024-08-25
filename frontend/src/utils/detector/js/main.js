@@ -85,6 +85,7 @@ class JsDetectionHandler {
         }
     }
 
+    // Updated detectFunction to handle annotated arrow functions
     detectFunction(node, parentPath, parentId, currentFunctionId, cursor) {
         let functionName = node.childForFieldName('name')?.text;
 
@@ -93,13 +94,12 @@ class JsDetectionHandler {
             functionName = node.parent.childForFieldName('key')?.text;
         }
 
-        if (!functionName && (node.type === 'arrow_function' || node.type === 'function')) {
+        if (!functionName && (node.type === 'arrow_function_ex' || node.type === 'function')) {
             const parent = node.parent;
-            if (parent.type === 'variable_declarator') {
+            if (parent.type === 'variable_declarator' || parent.type === 'type_annotation') {
                 functionName = parent.childForFieldName('name')?.text;
             }
         }
-
 
         if (functionName && !this.importedModules.has(functionName) && !this.processedFunctions.has(functionName) && this.isInWatchedDir(this.currentFile)) {
             const path = `${parentPath}${functionName}`;

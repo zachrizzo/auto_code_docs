@@ -1,0 +1,52 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "React: Start",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "env": {
+        "BROWSER": "none"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Electron: Main",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "electron"],
+      "outputCapture": "std",
+      "env": {
+        "ELECTRON_DISABLE_SECURITY_WARNINGS": "true"
+      }
+    },
+    {
+      "name": "Electron: Renderer",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}/frontend/src",
+      "timeout": 30000
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Electron: All",
+      "configurations": [
+        "React: Start",
+        "Electron: Main",
+        "Electron: Renderer"
+      ],
+      "presentation": {
+        "order": 1,
+        "group": "Electron"
+      },
+      "stopAll": true
+    }
+  ]
+}

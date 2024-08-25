@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "webpack",
-    "dev": "webpack serve",
+    "start": "webpack serve --mode development",
+    "electron": "electron .",
+    "build": "webpack --mode production",
+    "dev": "webpack serve --mode development",
     "postinstall": "electron-rebuild -f -w tree-sitter tree-sitter-javascript",
     "backend": "cd ../backend && python3 server.py"
   },
@@ -36,6 +37,7 @@
     "react-router-dom": "^6.26.0",
     "reactflow": "^11.11.4",
     "styled-components": "^6.1.12",
+    "wait-on": "^8.0.0",
     "web-tree-sitter": "^0.22.6"
   },
   "devDependencies": {
