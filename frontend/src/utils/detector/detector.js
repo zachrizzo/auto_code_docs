@@ -120,7 +120,7 @@ export function resolveCrossFileDependencies() {
             calls.forEach(call => {
                 const callName = call.trim().slice(0, -1);
                 const calledFunction = allFunctions.get(callName);
-                if (calledFunction) {
+                if (calledFunction && calledFunction.id !== entityId) {
                     // Record all function calls
                     if (!fileResults.functionCallRelationships[entityId]) {
                         fileResults.functionCallRelationships[entityId] = [];
@@ -165,65 +165,13 @@ export function resolveCrossFileDependencies() {
             }
         });
 
-        // Check indirect relationships
-        if (fileResults.indirectRelationships) {
-            Object.entries(fileResults.indirectRelationships).forEach(([funcId, calls]) => {
-                const funcDeclaration = fileResults.allDeclarations[funcId];
-                if (funcDeclaration) {
-                    calls.forEach(callId => {
-                        const callDeclaration = fileResults.allDeclarations[callId];
-                        if (callDeclaration) {
-                            const calledFunction = allFunctions.get(callDeclaration.name);
-                            if (calledFunction && calledFunction.fileName !== fileName) {
-                                if (!fileResults.crossFileRelationships.indirectRelationships) {
-                                    fileResults.crossFileRelationships.indirectRelationships = {};
-                                }
-                                if (!fileResults.crossFileRelationships.indirectRelationships[funcId]) {
-                                    fileResults.crossFileRelationships.indirectRelationships[funcId] = [];
-                                }
-                                if (!fileResults.crossFileRelationships.indirectRelationships[funcId].includes(calledFunction.id)) {
-                                    fileResults.crossFileRelationships.indirectRelationships[funcId].push(calledFunction.id);
-                                }
-                            }
-                        }
-                    });
+        // Ensure functionCallRelationships are arrays
+        if (fileResults.functionCallRelationships) {
+            for (const [key, value] of Object.entries(fileResults.functionCallRelationships)) {
+                if (!Array.isArray(value)) {
+                    fileResults.functionCallRelationships[key] = Array.from(value);
                 }
-            });
-        }
-
-        // Process existing functionCalls
-        if (fileResults.functionCalls) {
-            Object.entries(fileResults.functionCalls).forEach(([calledFuncId, callerFuncIds]) => {
-                const calledFuncDeclaration = fileResults.allDeclarations[calledFuncId];
-                if (calledFuncDeclaration) {
-                    const calledFunc = allFunctions.get(calledFuncDeclaration.name);
-                    if (calledFunc) {
-                        callerFuncIds.forEach(callerId => {
-                            const callerFuncDeclaration = fileResults.allDeclarations[callerId];
-                            if (callerFuncDeclaration) {
-                                if (!fileResults.functionCallRelationships[callerId]) {
-                                    fileResults.functionCallRelationships[callerId] = [];
-                                }
-                                if (!fileResults.functionCallRelationships[callerId].includes(calledFunc.id)) {
-                                    fileResults.functionCallRelationships[callerId].push(calledFunc.id);
-                                }
-
-                                if (calledFunc.fileName !== fileName) {
-                                    if (!fileResults.crossFileRelationships.functionCalls) {
-                                        fileResults.crossFileRelationships.functionCalls = {};
-                                    }
-                                    if (!fileResults.crossFileRelationships.functionCalls[callerId]) {
-                                        fileResults.crossFileRelationships.functionCalls[callerId] = [];
-                                    }
-                                    if (!fileResults.crossFileRelationships.functionCalls[callerId].includes(calledFunc.id)) {
-                                        fileResults.crossFileRelationships.functionCalls[callerId].push(calledFunc.id);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-            });
+            }
         }
     }
 

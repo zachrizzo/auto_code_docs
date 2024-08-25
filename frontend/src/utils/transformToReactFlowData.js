@@ -25,13 +25,12 @@ export async function transformToReactFlowData(parsedData) {
         return { nodes, edges };
     }
 
-    // Function to get the file name from a path
     const getFileName = (path) => {
         const parts = path.split('/');
         return parts[parts.length - 1];
     };
 
-    // First pass: Create all nodes
+    // Create nodes
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         if (!fileData || typeof fileData !== 'object') {
             console.error('Invalid file data for:', fileName);
@@ -39,167 +38,142 @@ export async function transformToReactFlowData(parsedData) {
         }
 
         const fileNodeId = `file-${getFileName(fileName)}`;
-        nodes.push({
-            id: fileNodeId,
-            data: {
-                label: getFileName(fileName),
-                sourceHandles: [
-                    { id: `${fileNodeId}-s-a` },
-                    { id: `${fileNodeId}-s-b` },
-                    { id: `${fileNodeId}-s-c` }
-                ],
-                targetHandles: [
-                    { id: `${fileNodeId}-t-a` },
-                    { id: `${fileNodeId}-t-b` },
-                    { id: `${fileNodeId}-t-c` }
-                ]
-            },
-            type: 'elk',
-            position: { x: 0, y: 0 }
-        });
+        nodes.push(createNode(fileNodeId, getFileName(fileName)));
         nodeSet.add(fileNodeId);
 
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
-            nodes.push({
-                id: id,
-                data: {
-                    label: declaration.name,
-                    sourceHandles: [
-                        { id: `${id}-s-a` },
-                        { id: `${id}-s-b` },
-                        { id: `${id}-s-c` }
-                    ],
-                    targetHandles: [
-                        { id: `${id}-t-a` },
-                        { id: `${id}-t-b` },
-                        { id: `${id}-t-c` }
-                    ]
-                },
-                type: 'elk',
-                position: { x: 0, y: 0 }
-            });
+            nodes.push(createNode(id, declaration.name));
             nodeSet.add(id);
         }
     }
 
-    // Function to safely add edges
-    const safeAddEdge = (sourceId, targetId, options = {}) => {
-        if (nodeSet.has(sourceId) && nodeSet.has(targetId)) {
-            const sourceHandle = `${sourceId}-s-${String.fromCharCode(97 + (edges.length % 3))}`;
-            const targetHandle = `${targetId}-t-${String.fromCharCode(97 + (edges.length % 3))}`;
-            edges.push({
-                id: `${sourceId}-${targetId}${options.type ? `-${options.type}` : ''}`,
-                source: sourceId,
-                sourceHandle: sourceHandle,
-                target: targetId,
-                targetHandle: targetHandle,
-                animated: options.type === 'call' || options.type === 'crossFileCall',
-                style: {
-                    stroke: options.type === 'call' ? '#ff0000' :
-                        options.type === 'crossFileCall' ? '#FBFF00' : '#FFFFFF',
-                    strokeWidth: 2,
-                    strokeDasharray: (options.type === 'call' || options.type === 'crossFileCall') ? '5,5' : 'none',
-                },
-                type: 'default'
-            });
-        } else {
-            console.warn(`Skipping edge creation: node not found. Source: ${sourceId}, Target: ${targetId}`);
-        }
-    };
-
-    // Second pass: Create all edges
-    // Second pass: Create all edges
+    // Create edges
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         const fileNodeId = `file-${getFileName(fileName)}`;
-        const directRelationships = fileData.directRelationships || {};
-        const rootFunctionIds = fileData.rootFunctionIds || [];
 
         // Add edges from file to root functions
-        for (const id of rootFunctionIds) {
-            safeAddEdge(fileNodeId, id, { type: 'declaration' });
-        }
+        (fileData.rootFunctionIds || []).forEach(id =>
+            safeAddEdge(fileNodeId, id, { type: 'declaration' }, edges, nodeSet));
 
-        // Add direct relationships (function declarations)
-        for (const [sourceId, targetIds] of Object.entries(directRelationships)) {
+        // Add direct relationships
+        for (const [sourceId, targetIds] of Object.entries(fileData.directRelationships || {})) {
             if (Array.isArray(targetIds)) {
-                targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { type: 'declaration' }));
+                targetIds.forEach(targetId =>
+                    safeAddEdge(sourceId, targetId, { type: 'declaration' }, edges, nodeSet));
             }
         }
 
         // Add edges for methods to their parent class
-        if (fileData.methods) {
-            fileData.methods.forEach(method => {
-                if (method.parentClassId) {
-                    safeAddEdge(method.parentClassId, method.id, { type: 'declaration' });
-                }
-            });
-        }
+        (fileData.methods || []).forEach(method => {
+            if (method.parentClassId) {
+                safeAddEdge(method.parentClassId, method.id, { type: 'declaration' }, edges, nodeSet);
+            }
+        });
 
-        // Add edges for function calls within the same file
-        if (fileData.functionCalls) {
-            for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCalls)) {
-                if (Array.isArray(callerIds)) {
-                    callerIds.forEach(callerId => {
-                        if (callerId !== 'top-level') {
-                            safeAddEdge(callerId, calledFunctionId, { type: 'call' });
-                        }
-                    });
-                }
+        // Add edges for function calls
+        for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCalls
+            || {})) {
+            if (Array.isArray(callerIds)) {
+                callerIds.forEach(callerId => {
+                    if (callerId !== 'top-level') {
+                        safeAddEdge(callerId, calledFunctionId, { type: 'call' }, edges, nodeSet);
+                    }
+                });
             }
         }
 
         // Add cross-file relationships
-        if (fileData.crossFileRelationships) {
-            for (const [entityType, entities] of Object.entries(fileData.crossFileRelationships)) {
-                for (const [sourceId, targetIds] of Object.entries(entities)) {
-                    if (Array.isArray(targetIds)) {
-                        targetIds.forEach(targetId => safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }));
-                    }
+        for (const [entityType, entities] of Object.entries(fileData.crossFileRelationships || {})) {
+            for (const [sourceId, targetIds] of Object.entries(entities)) {
+                if (Array.isArray(targetIds)) {
+                    targetIds.forEach(targetId =>
+                        safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }, edges, nodeSet));
                 }
             }
         }
     }
 
-    const graph = {
+    const graph = createElkGraph(nodes, edges);
+    const layoutedGraph = await elk.layout(graph);
+
+    const layoutedNodes = nodes.map(node => ({
+        ...node,
+        position: getNodePosition(layoutedGraph, node.id),
+    }));
+
+    console.log('Layouted Nodes:', layoutedNodes);
+
+    return { nodes: layoutedNodes, edges };
+}
+
+function createNode(id, label) {
+    return {
+        id,
+        data: {
+            label,
+            sourceHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-s-${suffix}` })),
+            targetHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-t-${suffix}` })),
+        },
+        type: 'elk',
+        position: { x: 0, y: 0 },
+    };
+}
+
+function safeAddEdge(sourceId, targetId, options, edges, nodeSet) {
+    if (nodeSet.has(sourceId) && nodeSet.has(targetId)) {
+        const sourceHandle = `${sourceId}-s-${String.fromCharCode(97 + (edges.length % 3))}`;
+        const targetHandle = `${targetId}-t-${String.fromCharCode(97 + (edges.length % 3))}`;
+        edges.push({
+            id: `${sourceId}-${targetId}${options.type ? `-${options.type}` : ''}`,
+            source: sourceId,
+            sourceHandle,
+            target: targetId,
+            targetHandle,
+            animated: options.type === 'call' || options.type === 'crossFileCall',
+            style: {
+                stroke: getEdgeColor(options.type),
+                strokeWidth: 2,
+                strokeDasharray: (options.type === 'call' || options.type === 'crossFileCall') ? '5,5' : 'none',
+            },
+            type: 'default',
+        });
+    } else {
+        console.warn(`Skipping edge creation: node not found. Source: ${sourceId}, Target: ${targetId}`);
+    }
+}
+
+function getEdgeColor(type) {
+    switch (type) {
+        case 'call': return '#ff0000';
+        case 'crossFileCall': return '#FBFF00';
+        default: return '#FFFFFF';
+    }
+}
+
+function createElkGraph(nodes, edges) {
+    return {
         id: 'root',
-        layoutOptions: layoutOptions,
-        children: nodes.map((n) => ({
+        layoutOptions,
+        children: nodes.map(n => ({
             id: n.id,
             width: 300,
             height: 80,
-            properties: {
-                'org.eclipse.elk.portConstraints': 'FIXED_SIDE',
-            },
+            properties: { 'org.eclipse.elk.portConstraints': 'FIXED_SIDE' },
             ports: [
-                ...(n.data.targetHandles || []).map((t) => ({
-                    id: t.id,
-                    properties: { side: 'WEST' },
-                })),
-                ...(n.data.sourceHandles || []).map((s) => ({
-                    id: s.id,
-                    properties: { side: 'EAST' },
-                })),
+                ...n.data.targetHandles.map(t => ({ id: t.id, properties: { side: 'WEST' } })),
+                ...n.data.sourceHandles.map(s => ({ id: s.id, properties: { side: 'EAST' } })),
             ],
         })),
-        edges: edges.map((e) => ({
+        edges: edges.map(e => ({
             id: e.id,
             sources: [e.sourceHandle],
             targets: [e.targetHandle],
         })),
     };
+}
 
-    const layoutedGraph = await elk.layout(graph);
-
-    const layoutedNodes = nodes.map((node) => {
-        const layoutedNode = layoutedGraph.children.find((n) => n.id === node.id);
-        return {
-            ...node,
-            position: layoutedNode ? { x: layoutedNode.x, y: layoutedNode.y } : { x: 0, y: 0 },
-        };
-    });
-
-    console.log('Layouted Nodes:', layoutedNodes);
-
-    return { nodes: layoutedNodes, edges: edges };
+function getNodePosition(layoutedGraph, nodeId) {
+    const layoutedNode = layoutedGraph.children.find(n => n.id === nodeId);
+    return layoutedNode ? { x: layoutedNode.x, y: layoutedNode.y } : { x: 0, y: 0 };
 }

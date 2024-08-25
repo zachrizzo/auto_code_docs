@@ -17,6 +17,10 @@ class JsDetectionHandler {
         this.importedModules = new Set();
         this.currentClassId = null;
         this.functionCalls = new Set();
+        this.functionNameToId = new Map();
+        this.functionCallsMap = {};
+        this.results.functionCalls = {}; // Ensure functionCalls is initialized as an empty object
+        this.results.functionCallRelationships = {}; // Ensure functionCallRelationships is initialized
     }
 
 
@@ -35,6 +39,11 @@ class JsDetectionHandler {
         }
 
         const id = this.generateUniqueId(code);
+
+        if (type === 'function' || type === 'method') {
+            this.functionNameToId.set(name, id);
+        }
+
         const declaration = {
             id,
             name,
@@ -53,6 +62,13 @@ class JsDetectionHandler {
         return crypto.createHash('sha256').update(code).digest('hex');
     }
 
+    recordPotentialImport(importedName, source, originalName) {
+        if (!this.potentialImports) {
+            this.potentialImports = new Map();
+        }
+        this.potentialImports.set(importedName, { source, originalName });
+    }
+
     detectImport(node) {
         const importSource = node.childForFieldName('source')?.text;
         if (importSource) {
@@ -60,8 +76,9 @@ class JsDetectionHandler {
             if (importSpecifiers) {
                 importSpecifiers.children.forEach(specifier => {
                     const importedName = specifier.childForFieldName('local')?.text;
+                    const originalName = specifier.childForFieldName('name')?.text || importedName;
                     if (importedName) {
-                        this.importedModules.add(importedName);
+                        this.recordPotentialImport(importedName, importSource, originalName);
                     }
                 });
             }
@@ -252,55 +269,91 @@ class JsDetectionHandler {
     detectFunctionCall(node, currentFunctionId) {
         const callName = node.childForFieldName('function')?.text;
         if (callName) {
-            // Check if it's a method call
             const objectName = node.childForFieldName('function')?.childForFieldName('object')?.text;
             const fullCallName = objectName ? `${objectName}.${callName}` : callName;
 
-            // Ensure this.results.functionCalls is initialized as an object
-            if (!this.results.functionCalls) {
-                console.log("Initializing this.results.functionCalls as an empty object");
-                this.results.functionCalls = {};
+            // Initialize functionCalls[currentFunctionId] as a Set if not already initialized
+            if (!this.results.functionCalls[currentFunctionId]) {
+                this.results.functionCalls[currentFunctionId] = new Set(); // Ensure it's a Set
+            } else if (!(this.results.functionCalls[currentFunctionId] instanceof Set)) {
+                // If it's not a Set, convert it to a Set
+                this.results.functionCalls[currentFunctionId] = new Set(this.results.functionCalls[currentFunctionId]);
             }
 
-            // Check the type of this.results.functionCalls[fullCallName]
-            if (!this.results.functionCalls[fullCallName]) {
-                console.log(`Initializing this.results.functionCalls[${fullCallName}] as a Set`);
-                this.results.functionCalls[fullCallName] = new Set();
-            } else if (!(this.results.functionCalls[fullCallName] instanceof Set)) {
-                console.error(`Type Error: this.results.functionCalls[${fullCallName}] is not a Set`);
-                console.error(`Current value:`, this.results.functionCalls[fullCallName]);
-                return; // Stop further execution to prevent errors
+            // Resolve called function ID from the map
+            const calledFunctionId = this.functionNameToId.get(callName);
+
+            if (calledFunctionId && currentFunctionId !== calledFunctionId) {
+                this.results.functionCalls[currentFunctionId].add(calledFunctionId);
+            } else if (callName) {
+                console.warn(`Function ID not resolved for callName: ${callName}`);
             }
 
-            // Add the currentFunctionId to the set
-            if (currentFunctionId) {
-                console.log(`Adding function ID ${currentFunctionId} to the set for ${fullCallName}`);
-                this.results.functionCalls[fullCallName].add(currentFunctionId);
-            } else {
-                // If there's no current function ID, it might be a top-level call
-                console.log(`Adding 'top-level' to the set for ${fullCallName}`);
-                this.results.functionCalls[fullCallName].add('top-level');
-            }
-
-            // Check for callback functions in the arguments
-            const args = node.childForFieldName('arguments');
-            if (args) {
-                args.children.forEach((arg, index) => {
-                    if (arg.type === 'function' || arg.type === 'arrow_function') {
-                        const callbackId = this.detectFunction(arg, `${fullCallName}-arg${index}-`, currentFunctionId, null, arg.cursor);
-                        if (callbackId) {
-                            if (!this.results.callbackRelationships) {
-                                this.results.callbackRelationships = {};
-                            }
-                            if (!this.results.callbackRelationships[fullCallName]) {
-                                this.results.callbackRelationships[fullCallName] = [];
-                            }
-                            this.results.callbackRelationships[fullCallName].push(callbackId);
-                        }
+            // Handle method calls on 'this'
+            if (objectName && objectName === 'this') {
+                const parentClass = this.findParentClass(node);
+                if (parentClass) {
+                    const methodId = this.findMethodId(parentClass.id, callName);
+                    if (methodId && methodId !== currentFunctionId) {
+                        this.results.functionCalls[currentFunctionId].add(methodId);
                     }
-                });
+                }
+            } else {
+                const parentFunction = this.findParentFunction(node);
+                if (parentFunction) {
+                    const parentFunctionId = this.functionNameToId.get(parentFunction.childForFieldName('name')?.text);
+                    if (parentFunctionId && parentFunctionId !== currentFunctionId) {
+                        this.addFunctionCallRelationship(parentFunctionId, calledFunctionId);
+                    }
+                }
             }
         }
+    }
+
+    addFunctionCallRelationship(callerId, calleeId) {
+        if (!this.results.functionCallRelationships) {
+            this.results.functionCallRelationships = {};
+        }
+        if (!this.results.functionCallRelationships[callerId]) {
+            this.results.functionCallRelationships[callerId] = [];
+        }
+        if (callerId !== calleeId && !this.results.functionCallRelationships[callerId].includes(calleeId)) {
+            this.results.functionCallRelationships[callerId].push(calleeId);
+        }
+    }
+
+    findParentClass(node) {
+        let current = node;
+        while (current) {
+            if (current.type === 'class_declaration') {
+                return current;
+            }
+            current = current.parent;
+        }
+        return null;
+    }
+
+    findMethodId(classId, methodName) {
+        const methods = this.results.methods.filter(method => method.parentClassId === classId);
+        for (const method of methods) {
+            if (this.results.allDeclarations[method.id].name === methodName) {
+                return method.id;
+            }
+        }
+        return null;
+    }
+
+    findParentFunction(node) {
+        let current = node;
+        while (current) {
+            if (current.type === 'function_declaration' ||
+                current.type === 'method_definition' ||
+                current.type === 'arrow_function') {
+                return current;
+            }
+            current = current.parent;
+        }
+        return null;
     }
 
 
@@ -323,13 +376,14 @@ class JsDetectionHandler {
             this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
             this.results.directRelationships[parentId].push(id);
         }
-        const functionName = this.results.allDeclarations[id].name;
-        if (this.results.functionCalls && this.results.functionCalls[functionName]) {
+
+        if (this.results.functionCalls && this.results.functionCalls[id]) {
             if (!this.results.functionCallRelationships) {
                 this.results.functionCallRelationships = {};
             }
-            this.results.functionCallRelationships[id] = Array.from(this.results.functionCalls[functionName]);
+            this.results.functionCallRelationships[id] = Array.from(this.results.functionCalls[id]);
         }
+
     }
     analyzeMethodBody(node, id) {
         // Implement method body analysis logic here
@@ -374,6 +428,15 @@ class JsDetectionHandler {
         if (this.results.functionCalls) {
             for (const [key, value] of Object.entries(this.results.functionCalls)) {
                 this.results.functionCalls[key] = Array.from(value);
+            }
+        }
+
+        // Ensure functionCallRelationships are arrays
+        if (this.results.functionCallRelationships) {
+            for (const [key, value] of Object.entries(this.results.functionCallRelationships)) {
+                if (!Array.isArray(value)) {
+                    this.results.functionCallRelationships[key] = Array.from(value);
+                }
             }
         }
     }
