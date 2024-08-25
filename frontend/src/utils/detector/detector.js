@@ -175,5 +175,7 @@ export function resolveCrossFileDependencies() {
         }
     }
 
+    console.log("Resolved Results:", resolvedResults);
+
     return resolvedResults;
 }

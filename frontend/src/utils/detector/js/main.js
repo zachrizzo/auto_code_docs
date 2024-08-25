@@ -88,6 +88,11 @@ class JsDetectionHandler {
     detectFunction(node, parentPath, parentId, currentFunctionId, cursor) {
         let functionName = node.childForFieldName('name')?.text;
 
+        // Check if this function is part of an object literal
+        if (!functionName && node.parent && node.parent.type === 'pair') {
+            functionName = node.parent.childForFieldName('key')?.text;
+        }
+
         if (!functionName && (node.type === 'arrow_function' || node.type === 'function')) {
             const parent = node.parent;
             if (parent.type === 'variable_declarator') {
@@ -95,13 +100,14 @@ class JsDetectionHandler {
             }
         }
 
+
         if (functionName && !this.importedModules.has(functionName) && !this.processedFunctions.has(functionName) && this.isInWatchedDir(this.currentFile)) {
             const path = `${parentPath}${functionName}`;
             const id = this.addDeclaration(functionName, node.type === 'method_definition' ? 'method' : 'function', path, node.text);
 
             if (id) {
-                if (node.type === 'method_definition') {
-                    this.results.methods.push({ id, parentClassId: this.currentClassId });
+                if (node.type === 'method_definition' || (node.parent && node.parent.type === 'pair')) {
+                    this.results.methods.push({ id, parentClassId: this.currentClassId || parentId });
                     this.results.directRelationships[parentId] = this.results.directRelationships[parentId] || [];
                     this.results.directRelationships[parentId].push(id);
                 } else {
@@ -269,43 +275,18 @@ class JsDetectionHandler {
     detectFunctionCall(node, currentFunctionId) {
         const callName = node.childForFieldName('function')?.text;
         if (callName) {
-            const objectName = node.childForFieldName('function')?.childForFieldName('object')?.text;
-            const fullCallName = objectName ? `${objectName}.${callName}` : callName;
+            if (!currentFunctionId) {
+                console.warn(`Function call to ${callName} detected outside of any function context`);
+                currentFunctionId = 'global'; // or some other appropriate identifier for top-level calls
+            }
 
-            // Initialize functionCalls[currentFunctionId] as a Set if not already initialized
             if (!this.results.functionCalls[currentFunctionId]) {
-                this.results.functionCalls[currentFunctionId] = new Set(); // Ensure it's a Set
-            } else if (!(this.results.functionCalls[currentFunctionId] instanceof Set)) {
-                // If it's not a Set, convert it to a Set
-                this.results.functionCalls[currentFunctionId] = new Set(this.results.functionCalls[currentFunctionId]);
+                this.results.functionCalls[currentFunctionId] = [];
             }
 
-            // Resolve called function ID from the map
             const calledFunctionId = this.functionNameToId.get(callName);
-
-            if (calledFunctionId && currentFunctionId !== calledFunctionId) {
-                this.results.functionCalls[currentFunctionId].add(calledFunctionId);
-            } else if (callName) {
-                console.warn(`Function ID not resolved for callName: ${callName}`);
-            }
-
-            // Handle method calls on 'this'
-            if (objectName && objectName === 'this') {
-                const parentClass = this.findParentClass(node);
-                if (parentClass) {
-                    const methodId = this.findMethodId(parentClass.id, callName);
-                    if (methodId && methodId !== currentFunctionId) {
-                        this.results.functionCalls[currentFunctionId].add(methodId);
-                    }
-                }
-            } else {
-                const parentFunction = this.findParentFunction(node);
-                if (parentFunction) {
-                    const parentFunctionId = this.functionNameToId.get(parentFunction.childForFieldName('name')?.text);
-                    if (parentFunctionId && parentFunctionId !== currentFunctionId) {
-                        this.addFunctionCallRelationship(parentFunctionId, calledFunctionId);
-                    }
-                }
+            if (calledFunctionId) {
+                this.results.functionCalls[currentFunctionId].push(calledFunctionId);
             }
         }
     }
@@ -393,6 +374,23 @@ class JsDetectionHandler {
         do {
             const node = cursor.currentNode;
             const type = node.type;
+
+            // Update currentFunctionId when entering a new function
+            // Update currentFunctionId when entering a new function or method
+            if (node.type === 'function_declaration' || node.type === 'method_definition' ||
+                node.type === 'function' || node.type === 'arrow_function') {
+                const functionName = node.childForFieldName('name')?.text ||
+                    (node.parent?.type === 'variable_declarator' ?
+                        node.parent.childForFieldName('name')?.text : null);
+                if (functionName) {
+                    currentFunctionId = this.functionNameToId.get(functionName);
+                }
+            }
+
+            if (node.type === 'call_expression') {
+                this.detectFunctionCall(node, currentFunctionId);
+            }
+
 
             if (type === 'import_statement') {
                 this.detectImport(node);
