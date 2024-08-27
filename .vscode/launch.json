@@ -5,9 +5,9 @@
       "name": "React: Start",
       "type": "node",
       "request": "launch",
-      "cwd": "${workspaceFolder}/frontend",
+      "cwd": "${workspaceFolder}/frontend/src",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["run", "start"],
       "env": {
         "BROWSER": "none"
       },
@@ -17,7 +17,7 @@
       "name": "Electron: Main",
       "type": "node",
       "request": "launch",
-      "cwd": "${workspaceFolder}",
+      "cwd": "${workspaceFolder}/frontend/src",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "electron"],
       "outputCapture": "std",
@@ -30,7 +30,7 @@
       "type": "chrome",
       "request": "attach",
       "port": 9222,
-      "webRoot": "${workspaceFolder}/frontend/src",
+      "webRoot": "${workspaceFolder}/frontend",
       "timeout": 30000
     }
   ],
