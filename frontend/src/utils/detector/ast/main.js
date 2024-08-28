@@ -446,3 +446,4 @@ class JsDetectionHandler {
 }
 
 export default JsDetectionHandler;
+

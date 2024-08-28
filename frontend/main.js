@@ -5,6 +5,8 @@ const fs = require('fs');
 
 let mainWindow;  // Define mainWindow at the top level
 
+app.commandLine.appendSwitch('remote-debugging-port', '9222');
+
 async function createWindow() {
     const isDev = (await import('electron-is-dev')).default;
 
@@ -17,6 +19,11 @@ async function createWindow() {
         }
     });
 
+    // mainWindow.webContents.openDevTools();
+    // mainWindow.loadURL('http://localhost:3001');
+
+
+
     mainWindow.loadURL(
         isDev
             ? 'http://localhost:3001'
@@ -27,18 +34,27 @@ async function createWindow() {
         mainWindow.webContents.openDevTools();
     }
 
-    mainWindow.webContents.on('did-fail-load', () => {
-        mainWindow.loadURL('http://localhost:3001');
-    });
 
-    mainWindow.webContents.on('did-finish-load', () => {
-        if (isDev) {
-            mainWindow.webContents.openDevTools();
-        }
-    });
+    // mainWindow.webContents.on('did-fail-load', () => {
+    //     mainWindow.loadURL('http://localhost:3001');
+    // });
+
+    // mainWindow.webContents.on('crashed', (event) => {
+    //     console.error('Renderer process crashed:', event);
+    // });
+
+    // process.on('uncaughtException', (error) => {
+    //     console.error('Uncaught exception:', error);
+    // });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    createWindow();
+
+    app.on('activate', function () {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+});
 
 ipcMain.handle('select-directory', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -82,8 +98,4 @@ app.on('window-all-closed', () => {
     }
 });
 
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
-});
+

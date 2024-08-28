@@ -14,7 +14,7 @@ const Analyzer = () => {
     const [results, setResults] = useState({});
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
-    const [watchingDir, setWatchingDir] = useState('/Users/zachrizzo/programing/auto_code_docs_app/frontend/src');
+    const [watchingDir, setWatchingDir] = useState('/Users/zachrizzo/programing/auto_code_docs_app/testCode/jsfunctions');
     const [viewMode, setViewMode] = useState('map');
 
     const handleAnalyze = useCallback(async () => {

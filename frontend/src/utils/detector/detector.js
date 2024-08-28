@@ -1,5 +1,5 @@
 import * as Parser from 'web-tree-sitter';
-import JsDetectionHandler from './js/main';
+import ASTDetectionHandler from './ast/ast';
 
 let parsers = {};
 let globalResults = {}; // To store parsed results for all files
@@ -37,7 +37,7 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
     };
 
     const parser = new Parser();
-    const jsDetectionHandler = new JsDetectionHandler(parser, results, processedFunctions, currentAnalysisId, watchedDir, fileName);
+    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, currentAnalysisId, watchedDir, fileName);
 
     parser.setLanguage(parsers[language]);
 
@@ -51,7 +51,7 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
 
 
 
-    jsDetectionHandler.traverse(cursor);
+    ASTDetection.traverse(cursor);
 
     // Update globalResults
     if (!globalResults[fileName]) {
