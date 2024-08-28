@@ -25,10 +25,7 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
 
     const results = {
         fileName,
-        classes: [],
-        functions: [],
         directRelationships: {},
-        indirectRelationships: {},
         crossFileRelationships: {},
         allDeclarations: {},
         recursiveRelationships: [],

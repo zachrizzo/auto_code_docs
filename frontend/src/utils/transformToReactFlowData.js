@@ -80,7 +80,7 @@ export async function transformToReactFlowData(parsedData) {
 
 
         // Add edges for function calls
-        for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCalls || {})) {
+        for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCallRelationships || {})) {
             if (Array.isArray(callerIds)) {
                 callerIds.forEach(callerId => {
                     if (callerId !== 'top-level') {

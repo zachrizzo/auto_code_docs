@@ -86,10 +86,8 @@ class ASTDetectionHandler {
         this.currentFile = currentFile;
         this.importedModules = new Set();
         this.currentClassId = null;
-        this.currentFunctionName = null;
         this.currentFunctionId = null;
         this.functionNameToId = new Map();
-        this.functionCallsMap = {};
 
         this.functionHandler = new FunctionHandler(this);
 
@@ -102,12 +100,9 @@ class ASTDetectionHandler {
     }
 
     initializeResults() {
-        this.results.methods = this.results.methods || [];
-        this.results.functions = this.results.functions || [];
-        this.results.classes = this.results.classes || [];
+
         this.results.directRelationships = this.results.directRelationships || {};
         this.results.rootFunctionIds = this.results.rootFunctionIds || [];
-        this.results.functionCalls = this.results.functionCalls || {};
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
         this.results.allDeclarations = this.results.allDeclarations || {};
     }
@@ -129,6 +124,12 @@ class ASTDetectionHandler {
         console.log('nodeType:', nodeType, this.functionTypes, this.functionTypes.includes(nodeType));
 
         return this.functionTypes.includes(nodeType);
+    }
+
+    addRootLevelRelationShip(nodeId) {
+
+        this.results.rootFunctionIds = [...this.results.rootFunctionIds, nodeId]
+
     }
 
     addDeclaration(name, type, path, code) {
@@ -168,6 +169,7 @@ class ASTDetectionHandler {
             if (nodeType === 'program') {
                 // Traverse the children of the program node
                 if (cursor.gotoFirstChild()) {
+
                     // Recursively traverse all children nodes
                     this.traverse(cursor, parentPath, null);
                     cursor.gotoParent(); // Return to the parent node after traversing children
@@ -195,95 +197,16 @@ class ASTDetectionHandler {
     }
 
 
-
-
-
-
-
-
-
-    extractFunctionName(node) {
-        if (node.type === 'arrow_function') {
-            return this.findArrowFunctionName(node);
-        }
-        return node.childForFieldName('name')?.text ||
-            (node.parent?.type === 'variable_declarator' ? node.parent.childForFieldName('name')?.text : null);
-    }
-
-    findArrowFunctionName(node) {
-        if (node.parent && node.parent.type === 'variable_declarator') {
-            const varNameNode = node.parent.childForFieldName('name');
-            return varNameNode ? varNameNode.text : 'anonymous';
-        }
-        if (node.parent && node.parent.type === 'assignment_expression') {
-            const leftNode = node.parent.childForFieldName('left');
-            return leftNode ? leftNode.text : 'anonymous';
-        }
-        return 'anonymous';
-    }
-
-    traverseChildren(node, parentPath, parentId) {
-        const children = node.namedChildren || node.children;
-
-        if (children && typeof children[Symbol.iterator] === 'function') {
-            for (let child of children) {
-                // Check if the child is an arrow function or other function type
-                if (child.type === 'arrow_function' ||
-                    child.type === 'function_expression' ||
-                    child.type === 'function_declaration' ||
-                    child.type === 'jsx_expression') {
-
-                    // Handle the arrow function node here
-                    console.log(`Found function type: ${child.type} at path: ${parentPath}`);
-                }
-
-                // Continue traversing deeper into the node's children
-                this.traverse(child, `${parentPath}${node.type}-`, parentId);
-            }
-        }
-    }
-
-
     finalizeRelationships() {
-        if (this.results.functionCalls) {
-            for (const [key, value] of Object.entries(this.results.functionCalls)) {
-                this.results.functionCalls[key] = Array.from(value);
-            }
-        }
-
         if (this.results.functionCallRelationships) {
             for (const [key, value] of Object.entries(this.results.functionCallRelationships)) {
-                if (!Array.isArray(value)) {
-                    this.results.functionCallRelationships[key] = Array.from(value);
-                }
+                this.results.functionCallRelationships[key] = Array.from(value);
             }
         }
+
     }
 
 
-
-
-    processFunctionCall(node) {
-        const calleeNode = node.childForFieldName('function');
-        if (calleeNode) {
-            const calleeName = calleeNode.text;
-            const callerId = this.currentClassId || this.functionNameToId.get(this.currentFunctionName);
-            const calleeId = this.functionNameToId.get(calleeName);
-
-            if (callerId && calleeId && callerId !== calleeId) {
-                this.results.functionCallRelationships[callerId] = this.results.functionCallRelationships[callerId] || [];
-                this.results.functionCallRelationships[callerId].push(calleeId);
-
-                this.results.directRelationships[callerId] = this.results.directRelationships[callerId] || [];
-                this.results.directRelationships[callerId].push(calleeId);
-            }
-        }
-    }
-
-
-    analyzeMethodBody(node, id) {
-        // Implement method body analysis logic here if needed
-    }
 }
 
 export default ASTDetectionHandler;

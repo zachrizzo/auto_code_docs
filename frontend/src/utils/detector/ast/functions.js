@@ -12,9 +12,9 @@ class FunctionHandler {
             const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
 
             if (id) {
-                this.addFunctionToResults(id, node, parentId);
-                this.astAnalyzer.analyzeMethodBody(node, id, this.astAnalyzer.results);
-                this.astAnalyzer.processedFunctions.add(functionName);
+                // this.addFunctionToResults(id, node, parentId);
+                // this.astAnalyzer.analyzeMethodBody(node, id, this.astAnalyzer.results);
+                // this.astAnalyzer.processedFunctions.add(functionName);
                 this.traverseFunctionBody(node, path, parentId, id);
                 return id;
             }
@@ -71,28 +71,6 @@ class FunctionHandler {
         return node.type === 'method_definition' ? 'method' : 'function';
     }
 
-    addFunctionToResults(id, node, parentId) {
-        if (this.isMethod(node)) {
-            this.addMethod(id, parentId);
-        } else {
-            this.addFunction(id, parentId);
-        }
-    }
-
-    isMethod(node) {
-        return node.type === 'method_definition' || (node.parent && node.parent.type === 'pair');
-    }
-
-    addMethod(id, parentId) {
-        this.astAnalyzer.results.methods.push({ id, parentClassId: this.currentClassId || parentId });
-        this.addDirectRelationship(parentId, id);
-    }
-
-    addFunction(id, parentId) {
-        this.astAnalyzer.results.functions.push({ id, parentFunctionId: this.currentFunctionId });
-        this.astAnalyzer.results.directRelationships[id] = [];
-        this.addFunctionRelationship(id, parentId);
-    }
 
     addFunctionRelationship(id, parentId) {
         if (!this.currentFunctionId && !parentId) {
