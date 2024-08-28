@@ -74,8 +74,6 @@ const langs = {
     },
     // Add more languages as needed
 };
-
-
 class ASTDetectionHandler {
     constructor(parser, results, processedFunctions, currentAnalysisId, watchedDir, currentFile, language = 'js') {
         this.parser = parser;
@@ -100,14 +98,11 @@ class ASTDetectionHandler {
     }
 
     initializeResults() {
-
         this.results.directRelationships = this.results.directRelationships || {};
         this.results.rootFunctionIds = this.results.rootFunctionIds || [];
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
         this.results.allDeclarations = this.results.allDeclarations || {};
     }
-
-
 
     isInWatchedDir(filePath) {
         const relativePath = path.relative(this.watchedDir, filePath);
@@ -116,20 +111,21 @@ class ASTDetectionHandler {
 
     getUniqueId(code) {
         let hashedId = crypto.createHash('sha256').update(code).digest('hex');
-
-        return hashedId
+        return hashedId;
     }
 
     isFunctionNode(nodeType) {
-        console.log('nodeType:', nodeType, this.functionTypes, this.functionTypes.includes(nodeType));
-
         return this.functionTypes.includes(nodeType);
     }
 
-    addRootLevelRelationShip(nodeId) {
+    isClassNode(nodeType) {
+        return this.classTypes.includes(nodeType);
+    }
 
-        this.results.rootFunctionIds = [...this.results.rootFunctionIds, nodeId]
-
+    addRootLevelRelationship(nodeId) {
+        if (!this.results.rootFunctionIds.includes(nodeId)) {
+            this.results.rootFunctionIds.push(nodeId);
+        }
     }
 
     addDeclaration(name, type, path, code) {
@@ -157,45 +153,54 @@ class ASTDetectionHandler {
         return id;
     }
 
-    traverse(cursor, parentPath = '', parentId = null) {
+    traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
         do {
             const node = cursor.currentNode;
             if (!node) return;
 
             const nodeType = node.type;
             const nodeCode = node.text;
-            const currentNodeId = this.getUniqueId(nodeCode); // Assuming getNodeId is a method to get a unique ID for the node
+            const currentNodeId = this.getUniqueId(nodeCode);
 
             if (nodeType === 'program') {
                 // Traverse the children of the program node
                 if (cursor.gotoFirstChild()) {
-
-                    // Recursively traverse all children nodes
-                    this.traverse(cursor, parentPath, null);
-                    cursor.gotoParent(); // Return to the parent node after traversing children
+                    this.traverse(cursor, parentPath, null, true);
+                    cursor.gotoParent();
                 }
             } else if (this.isFunctionNode(nodeType)) {
-                // Handle function nodes (including arrow functions and other types)
                 this.functionHandler.handleNode(node, parentPath, parentId);
 
-                // Recursively traverse function node's children
+                // Only add function as root-level if it's not nested (isRootLevel is true)
+                if (isRootLevel) {
+                    this.addRootLevelRelationship(currentNodeId);
+                }
+
+                // Traverse function node's children
                 if (cursor.gotoFirstChild()) {
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId);
-                    cursor.gotoParent(); // Return to the parent node after traversing children
+                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
+                    cursor.gotoParent();
+                }
+            } else if (this.isClassNode(nodeType)) {
+                // Handle class nodes logic if needed
+
+                // Traverse class node's children
+                if (cursor.gotoFirstChild()) {
+                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
+                    cursor.gotoParent();
                 }
             } else {
-                // For non-program and non-function nodes, continue traversing children
+                // For other nodes, continue traversing
                 if (cursor.gotoFirstChild()) {
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId);
-                    cursor.gotoParent(); // Return to the parent node after traversing children
+                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, isRootLevel);
+                    cursor.gotoParent();
                 }
             }
 
-        } while (cursor.gotoNextSibling()); // Continue with the next sibling node
+        } while (cursor.gotoNextSibling());
 
         this.finalizeRelationships();
     }
-
 
     finalizeRelationships() {
         if (this.results.functionCallRelationships) {
@@ -203,10 +208,7 @@ class ASTDetectionHandler {
                 this.results.functionCallRelationships[key] = Array.from(value);
             }
         }
-
     }
-
-
 }
 
 export default ASTDetectionHandler;
