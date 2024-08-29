@@ -1,115 +1,115 @@
-// Node.js example functions
+// // Node.js example functions
 
-// Regular function
-function add(a, b) {
-    return a + b;
-}
+// // Regular function
+// function add(a, b) {
+//     return a + b;
+// }
 
-// Arrow function
-const subtract = (a, b) => {
-    return a - b;
-};
+// // Arrow function
+// const subtract = (a, b) => {
+//     return a - b;
+// };
 
-// Anonymous function
-const multiply = function (a, b) {
-    return a * b;
-};
+// // Anonymous function
+// const multiply = function (a, b) {
+//     return a * b;
+// };
 
-// IIFE (Immediately Invoked Function Expression)
-(function () {
-    console.log('This is an IIFE');
-})();
+// // IIFE (Immediately Invoked Function Expression)
+// (function () {
+//     console.log('This is an IIFE');
+// })();
 
-// Asynchronous function
-async function fetchData(url) {
-    try {
-        const response = await fetch(url);
-        return await response.json();
-    } catch (error) {
-        console.error('Error fetching data:', error);
-    }
-}
+// // Asynchronous function
+// async function fetchData(url) {
+//     try {
+//         const response = await fetch(url);
+//         return await response.json();
+//     } catch (error) {
+//         console.error('Error fetching data:', error);
+//     }
+// }
 
-// Higher-order function
-function withLogging(fn) {
-    return function (...args) {
-        console.log('Arguments:', args);
-        return fn(...args);
-    };
-}
+// // Higher-order function
+// function withLogging(fn) {
+//     return function (...args) {
+//         console.log('Arguments:', args);
+//         return fn(...args);
+//     };
+// }
 
-// Node.js example using CommonJS module
-const fs = require('fs');
+// // Node.js example using CommonJS module
+// const fs = require('fs');
 
-function readFile(filePath) {
-    return fs.readFileSync(filePath, 'utf8');
-}
+// function readFile(filePath) {
+//     return fs.readFileSync(filePath, 'utf8');
+// }
 
-module.exports = { add, subtract, multiply, fetchData, withLogging, readFile };
+// module.exports = { add, subtract, multiply, fetchData, withLogging, readFile };
 
-// React example functions
+// // React example functions
 
-// React Functional Component
-import React, { useState, useEffect } from 'react';
+// // React Functional Component
+// import React, { useState, useEffect } from 'react';
 
-function MyFunctionalComponent() {
-    const [count, setCount] = useState(0);
+// function MyFunctionalComponent() {
+//     const [count, setCount] = useState(0);
 
-    const handleClick = () => {
-        setCount(count + 1);
+//     const handleClick = () => {
+//         setCount(count + 1);
 
-        const ok = () => {
-            console.log('ok')
-        }
-    }
+//         const ok = () => {
+//             console.log('ok')
+//         }
+//     }
 
-    const handleRoute = () => {
-        console.log('h')
-    }
-    function zach() {
-        console.log('this is a functions')
-    }
+//     const handleRoute = () => {
+//         console.log('h')
+//     }
+//     function zach() {
+//         console.log('this is a functions')
+//     }
 
 
-    useEffect(() => {
-        document.title = `You clicked ${count} times`;
-    }, [count]);
+//     useEffect(() => {
+//         document.title = `You clicked ${count} times`;
+//     }, [count]);
 
-    return (
-        <div>
-            <p>You clicked {count} times</p>
-            <button onClick={() => setCount(count + 1)}>Click me</button>
-        </div>
-    );
-}
+//     return (
+//         <div>
+//             <p>You clicked {count} times</p>
+//             <button onClick={() => setCount(count + 1)}>Click me</button>
+//         </div>
+//     );
+// }
 
-// React Class Component
-class MyClassComponent extends React.Component {
-    constructor(props) {
-        super(props);
-        this.state = { count: 0 };
-    }
+// // React Class Component
+// class MyClassComponent extends React.Component {
+//     constructor(props) {
+//         super(props);
+//         this.state = { count: 0 };
+//     }
 
-    componentDidMount() {
-        document.title = `You clicked ${this.state.count} times`;
-    }
+//     componentDidMount() {
+//         document.title = `You clicked ${this.state.count} times`;
+//     }
 
-    componentDidUpdate() {
-        document.title = `You clicked ${this.state.count} times`;
-    }
+//     componentDidUpdate() {
+//         document.title = `You clicked ${this.state.count} times`;
+//     }
 
-    handleClick = () => {
-        this.setState({ count: this.state.count + 1 });
-    };
+//     handleClick = () => {
+//         this.setState({ count: this.state.count + 1 });
+//     };
 
-    render() {
-        return (
-            <div>
-                <p>You clicked {this.state.count} times</p>
-                <button onClick={this.handleClick}>Click me</button>
-            </div>
-        );
-    }
-}
+//     render() {
+//         return (
+//             <div>
+//                 <p>You clicked {this.state.count} times</p>
+//                 <button onClick={this.handleClick}>Click me</button>
+//             </div>
+//         );
+//     }
+// }
 
-export { MyFunctionalComponent, MyClassComponent };
+// export { MyFunctionalComponent, MyClassComponent };

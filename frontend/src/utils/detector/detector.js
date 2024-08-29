@@ -45,8 +45,11 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         allDeclarations: {},
         recursiveRelationships: [],
         analysisId: currentAnalysisId,
-        rootFunctionIds: []
+        rootFunctionIds: [],
+        functionCallRelationships: {}, // Initialize as an empty object
+        functionNameToId: {}
     };
+
     const processedFunctions = new Set();
     const processedClasses = new Set();
 

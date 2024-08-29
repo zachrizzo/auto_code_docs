@@ -10,9 +10,13 @@ const langs = {
             'function_definition',  // Represents a function definition
             'lambda',               // Represents a lambda function
             'async_function_definition', // Represents an async function
+            'function'
         ],
         classes: [
             'class_definition' // Represents a class definition
+        ],
+        call: [
+            'call',
         ],
         other: [
             'import_statement',        // Represents an import statement
@@ -28,13 +32,14 @@ const langs = {
             'function_expression',    // Function expression
             'arrow_function',         // Arrow function
             'method_definition',      // Method in a class or object
-            'method_definition',      // Class method (Tree-sitter uses the same node type for method definitions)
-            'method_definition',      // Private class method (Private methods are also method definitions)
-            'method_definition',      // Method in an object literal
+            'function'
         ],
         classes: [
             'class_declaration', // Class declaration
             'class_expression'   // Class expression
+        ],
+        call: [
+            'call_expression',
         ],
         other: [
             'call_expression',       // Represents a function call
@@ -46,34 +51,45 @@ const langs = {
     java: {
         functions: [
             'method_declaration',      // Method declaration in a class
-            'constructor_declaration'  // Constructor declaration in a class
+            'constructor_declaration',  // Constructor declaration in a class
+            'function'
         ],
         classes: [
             'class_declaration',       // Class declaration
             'interface_declaration'    // Interface declaration
         ],
+        call: [
+            'method_invocation',
+        ],
         other: [
             'import_declaration',      // Import statement
             'package_declaration',     // Package statement
+            'method_invocation',       // Method call
         ]
     },
     ruby: {
         functions: [
             'method',   // Represents a method definition
             'lambda',   // Represents a lambda function
+            'function'
         ],
         classes: [
             'class',    // Represents a class definition
             'module'    // Represents a module definition
         ],
+        call: [
+            'call',
+        ],
         other: [
+            'call',     // Represents a function call
             'require',  // Require statement
             'if',       // If statement
             'while',    // While loop
         ]
     },
-    // Add more languages as needed
-};
+
+}
+
 class ASTDetectionHandler {
     constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python') {
         this.parser = parser;
@@ -84,11 +100,14 @@ class ASTDetectionHandler {
         this.watchedDir = watchedDir;
         this.currentFile = currentFile;
         this.importedModules = new Set();
+
         this.currentClassId = null;
         this.currentFunctionId = null;
-        this.functionNameToId = new Map();
         this.parentNodeId = null;
+
         this.parentStack = [];
+
+
 
         this.functionHandler = new FunctionHandler(this);
         this.classHandler = new ClassHandler(this);
@@ -96,6 +115,7 @@ class ASTDetectionHandler {
         // Retrieve node types from the language configuration
         this.functionTypes = langs[language]?.functions || [];
         this.classTypes = langs[language]?.classes || [];
+        this.calledFunction = langs[language]?.call || []
         this.otherTypes = langs[language]?.other || [];
 
         this.initializeResults();
@@ -125,6 +145,10 @@ class ASTDetectionHandler {
         return this.classTypes.includes(nodeType);
     }
 
+    isCalledNode(nodeType) {
+        return this.calledFunction.includes(nodeType)
+    }
+
     addRootLevelRelationship(nodeId) {
         if (!this.results.rootFunctionIds.includes(nodeId)) {
             this.results.rootFunctionIds.push(nodeId);
@@ -139,7 +163,10 @@ class ASTDetectionHandler {
         const id = this.getUniqueId(code);
 
         if (this.isFunctionNode(type)) {
-            this.functionNameToId.set(name, id);
+            if (!this.results.functionNameToId[name]) {
+                this.results.functionNameToId[name] = []
+            }
+            this.results.functionNameToId[name].push(id)
         }
 
         const declaration = {
@@ -156,8 +183,24 @@ class ASTDetectionHandler {
         return id;
     }
 
+    addFunctionCallRelationship(callerNodeId, calledFunctionName) {
+        if (!this.results.functionCallRelationships[callerNodeId]) {
+            this.results.functionCallRelationships[callerNodeId] = new Set();
+        }
+        this.results.functionCallRelationships[callerNodeId].add(calledFunctionName);
+    }
+
     traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
         // Initialize the stack to manage parent IDs
+
+        const getChildNodes = (cursor, parentPath = '', parentId = null, isRootLevel = true) => {
+            if (cursor.gotoFirstChild()) {
+                // Traverse child nodes with updated parentNodeId
+                this.traverse(cursor, parentPath, parentId, isRootLevel);
+                cursor.gotoParent();
+            }
+
+        }
 
 
         do {
@@ -170,6 +213,7 @@ class ASTDetectionHandler {
 
             const isFunction = this.isFunctionNode(nodeType);
             const isClass = this.isClassNode(nodeType);
+            const isCalledNode = this.isCalledNode(nodeType);
 
             // Handle 'program' node type
             if (nodeType === 'program') {
@@ -190,22 +234,23 @@ class ASTDetectionHandler {
                     this.addRootLevelRelationship(currentNodeId);
                 }
 
-                if (cursor.gotoFirstChild()) {
-                    // Traverse child nodes with updated parentNodeId
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
-                    cursor.gotoParent();
-                }
+
+                // Traverse child nodes with updated parentNodeId
+                getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false)
+
 
                 // Pop the parent ID from the stack when backtracking
                 this.parentStack.pop();
 
+            } else if (isCalledNode) {
+
+
+
             } else {
-                // Handle other node types
-                if (cursor.gotoFirstChild()) {
-                    // Traverse child nodes, keeping the parentId from the stack
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
-                    cursor.gotoParent();
-                }
+
+                // Traverse child nodes, keeping the parentId from the stack
+                getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+
             }
 
         } while (cursor.gotoNextSibling());
