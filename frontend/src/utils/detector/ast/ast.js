@@ -86,6 +86,7 @@ class ASTDetectionHandler {
         this.currentClassId = null;
         this.currentFunctionId = null;
         this.functionNameToId = new Map();
+        this.parentNodeId = null;
 
         this.functionHandler = new FunctionHandler(this);
 
@@ -110,8 +111,7 @@ class ASTDetectionHandler {
     }
 
     getUniqueId(code) {
-        let hashedId = crypto.createHash('sha256').update(code).digest('hex');
-        return hashedId;
+        return crypto.createHash('sha256').update(code).digest('hex');
     }
 
     isFunctionNode(nodeType) {
@@ -162,36 +162,37 @@ class ASTDetectionHandler {
             const nodeCode = node.text;
             const currentNodeId = this.getUniqueId(nodeCode);
 
+
+
+            // Handle 'program' node type
             if (nodeType === 'program') {
-                // Traverse the children of the program node
                 if (cursor.gotoFirstChild()) {
                     this.traverse(cursor, parentPath, null, true);
                     cursor.gotoParent();
                 }
             } else if (this.isFunctionNode(nodeType)) {
-                this.functionHandler.handleNode(node, parentPath, parentId);
+                // Handle function nodes
+                this.functionHandler.handleNode(node, parentPath, this.parentNodeId);
 
-                // Only add function as root-level if it's not nested (isRootLevel is true)
+                // Update parentNodeId to current node's ID for child nodes
+                this.parentNodeId = currentNodeId;
+
+
                 if (isRootLevel) {
                     this.addRootLevelRelationship(currentNodeId);
                 }
 
-                // Traverse function node's children
                 if (cursor.gotoFirstChild()) {
+                    // Traverse child nodes with updated parentNodeId
                     this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
                     cursor.gotoParent();
                 }
-            } else if (this.isClassNode(nodeType)) {
-                // Handle class nodes logic if needed
+                this.parentNodeId = null
 
-                // Traverse class node's children
-                if (cursor.gotoFirstChild()) {
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
-                    cursor.gotoParent();
-                }
             } else {
-                // For other nodes, continue traversing
+                // Handle other node types
                 if (cursor.gotoFirstChild()) {
+                    // Traverse child nodes, keeping the parentId
                     this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, isRootLevel);
                     cursor.gotoParent();
                 }

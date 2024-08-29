@@ -1,6 +1,5 @@
 class FunctionHandler {
     constructor(astAnalyzer) {
-
         this.astAnalyzer = astAnalyzer;
     }
 
@@ -12,16 +11,19 @@ class FunctionHandler {
             const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
 
             if (id) {
-                // this.addFunctionToResults(id, node, parentId);
-                // this.astAnalyzer.analyzeMethodBody(node, id, this.astAnalyzer.results);
-                // this.astAnalyzer.processedFunctions.add(functionName);
-                this.traverseFunctionBody(node, path, parentId, id);
+                // ParentId is dynamically fetched via ASTDetectionHandler method
+                if (parentId) {
+                    this.addFunctionRelationship(id, parentId);
+                }
+
+                // this.traverseFunctionBody(node, path, id);
+                this.astAnalyzer.processedFunctions.add(functionName);
+
                 return id;
             }
         }
         return null;
     }
-
     extractFunctionName(node) {
         let functionName = node.childForFieldName('name')?.text;
 
@@ -37,7 +39,7 @@ class FunctionHandler {
             }
         }
 
-        return functionName
+        return functionName;
     }
 
     getFunctionName(node) {
@@ -71,14 +73,12 @@ class FunctionHandler {
         return node.type === 'method_definition' ? 'method' : 'function';
     }
 
-
     addFunctionRelationship(id, parentId) {
-        if (!this.currentFunctionId && !parentId) {
-            this.astAnalyzer.results.rootFunctionIds.push(id);
-        } else if (this.currentFunctionId) {
-            this.addDirectRelationship(this.currentFunctionId, id);
-        } else if (parentId) {
-            this.addDirectRelationship(parentId, id);
+        if (parentId) {
+            // If there is a parent function, establish a child-parent relationship
+            if (this.astAnalyzer.results.allDeclarations[parentId]) { // Ensure parentId exists in declarations
+                this.addDirectRelationship(parentId, id);
+            }
         }
     }
 
@@ -87,11 +87,19 @@ class FunctionHandler {
         this.astAnalyzer.results.directRelationships[parentId].push(childId);
     }
 
-    traverseFunctionBody(node, path, parentId, functionId) {
+    traverseFunctionBody(node, path, functionId) {
         const bodyNode = node.childForFieldName('body');
-        if (bodyNode && bodyNode.cursor && bodyNode.cursor.gotoFirstChild()) {
-            this.traverse(bodyNode.cursor, `${path}-`, parentId, functionId);
-            bodyNode.cursor.gotoParent();
+        if (bodyNode) {
+            const cursor = bodyNode.walk();
+            if (cursor.gotoFirstChild()) {
+                do {
+                    const childNode = cursor.currentNode;
+                    if (this.astAnalyzer.isFunctionNode(childNode.type)) {
+                        // Handle nested functions and establish parent-child relationship
+                        this.handleNode(childNode, path, functionId); // Correctly pass the current functionId as parentId
+                    }
+                } while (cursor.gotoNextSibling());
+            }
         }
     }
 }
