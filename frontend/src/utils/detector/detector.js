@@ -32,16 +32,18 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
         analysisId: currentAnalysisId,
         rootFunctionIds: []
     };
+    const processedFunctions = new Set();
+    const processedClasses = new Set();
 
     const parser = new Parser();
-    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, currentAnalysisId, watchedDir, fileName);
+    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, fileName);
 
     parser.setLanguage(parsers[language]);
 
     const tree = parser.parse(code);
     const cursor = tree.walk();
 
-    const processedFunctions = new Set();
+
 
     currentAnalysisId++; // Increment for each new analysis
 

@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import path from 'path';
 import * as Parser from 'web-tree-sitter';
 import FunctionHandler from './functions';
+import ClassHandler from './classes';
 
 const langs = {
     python: {
@@ -75,10 +76,11 @@ const langs = {
     // Add more languages as needed
 };
 class ASTDetectionHandler {
-    constructor(parser, results, processedFunctions, currentAnalysisId, watchedDir, currentFile, language = 'js') {
+    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'js') {
         this.parser = parser;
         this.results = results;
         this.processedFunctions = processedFunctions || new Set();
+        this.processedClasses = processedClasses || new Set();
         this.currentAnalysisId = currentAnalysisId;
         this.watchedDir = watchedDir;
         this.currentFile = currentFile;
@@ -89,6 +91,7 @@ class ASTDetectionHandler {
         this.parentNodeId = null;
 
         this.functionHandler = new FunctionHandler(this);
+        this.classHandler = new ClassHandler(this);
 
         // Retrieve node types from the language configuration
         this.functionTypes = langs[language]?.functions || [];
@@ -162,6 +165,9 @@ class ASTDetectionHandler {
             const nodeCode = node.text;
             const currentNodeId = this.getUniqueId(nodeCode);
 
+            const isFunction = this.isFunctionNode(nodeType);
+            const isClass = this.isClassNode(nodeType);
+
 
 
             // Handle 'program' node type
@@ -170,9 +176,12 @@ class ASTDetectionHandler {
                     this.traverse(cursor, parentPath, null, true);
                     cursor.gotoParent();
                 }
-            } else if (this.isFunctionNode(nodeType)) {
+            } else if (isFunction || isClass) {
+
                 // Handle function nodes
-                this.functionHandler.handleNode(node, parentPath, this.parentNodeId);
+                if (isFunction) this.functionHandler.handleNode(node, parentPath, this.parentNodeId);
+
+                if (isClass) this.classHandler.handleNode(node, parentPath, this.parentNodeId);
 
                 // Update parentNodeId to current node's ID for child nodes
                 this.parentNodeId = currentNodeId;

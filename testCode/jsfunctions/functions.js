@@ -63,6 +63,13 @@ function MyFunctionalComponent() {
         }
     }
 
+    const handleRoute = () => {
+        console.log('h')
+    }
+    function zach() {
+        console.log('this is a functions')
+    }
+
 
     useEffect(() => {
         document.title = `You clicked ${count} times`;

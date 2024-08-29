@@ -24,6 +24,7 @@ class FunctionHandler {
         }
         return null;
     }
+
     extractFunctionName(node) {
         let functionName = node.childForFieldName('name')?.text;
 
