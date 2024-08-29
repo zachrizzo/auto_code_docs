@@ -89,6 +89,7 @@ class ASTDetectionHandler {
         this.currentFunctionId = null;
         this.functionNameToId = new Map();
         this.parentNodeId = null;
+        this.parentStack = [];
 
         this.functionHandler = new FunctionHandler(this);
         this.classHandler = new ClassHandler(this);
@@ -157,6 +158,11 @@ class ASTDetectionHandler {
     }
 
     traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
+        // Initialize the stack to manage parent IDs
+
+
+
+
         do {
             const node = cursor.currentNode;
             if (!node) return;
@@ -168,8 +174,6 @@ class ASTDetectionHandler {
             const isFunction = this.isFunctionNode(nodeType);
             const isClass = this.isClassNode(nodeType);
 
-
-
             // Handle 'program' node type
             if (nodeType === 'program') {
                 if (cursor.gotoFirstChild()) {
@@ -177,15 +181,13 @@ class ASTDetectionHandler {
                     cursor.gotoParent();
                 }
             } else if (isFunction || isClass) {
+                // Handle function and class nodes
+                if (isFunction) this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
 
-                // Handle function nodes
-                if (isFunction) this.functionHandler.handleNode(node, parentPath, this.parentNodeId);
-
-                if (isClass) this.classHandler.handleNode(node, parentPath, this.parentNodeId);
+                if (isClass) this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
 
                 // Update parentNodeId to current node's ID for child nodes
-                this.parentNodeId = currentNodeId;
-
+                this.parentStack.push(currentNodeId);
 
                 if (isRootLevel) {
                     this.addRootLevelRelationship(currentNodeId);
@@ -196,13 +198,15 @@ class ASTDetectionHandler {
                     this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
                     cursor.gotoParent();
                 }
-                this.parentNodeId = null
+
+                // Pop the parent ID from the stack when backtracking
+                this.parentStack.pop();
 
             } else {
                 // Handle other node types
                 if (cursor.gotoFirstChild()) {
-                    // Traverse child nodes, keeping the parentId
-                    this.traverse(cursor, `${parentPath}${nodeType}-`, currentNodeId, isRootLevel);
+                    // Traverse child nodes, keeping the parentId from the stack
+                    this.traverse(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
                     cursor.gotoParent();
                 }
             }
@@ -211,6 +215,7 @@ class ASTDetectionHandler {
 
         this.finalizeRelationships();
     }
+
 
     finalizeRelationships() {
         if (this.results.functionCallRelationships) {
