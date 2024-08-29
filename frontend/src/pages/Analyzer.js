@@ -27,10 +27,11 @@ const Analyzer = () => {
 
         const analyzeFile = async (filePath) => {
             const fileContent = fs.readFileSync(filePath, 'utf8');
-            const fileName = path.basename(filePath);
-            const analysisResults = await detectClassesAndFunctions(language, fileContent, filePath, watchingDir);
+            const fileExtension = path.extname(filePath); // Get the file extension
 
-            console.log(`Analysis results for ${fileName}:`, analysisResults);
+            const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
+
+            console.log(`Analysis results for ${filePath}:`, analysisResults);
 
             // Use filePath as the key to avoid overwriting
             aggregatedResults[filePath] = analysisResults;
@@ -62,6 +63,7 @@ const Analyzer = () => {
 
         setResults(resolvedResults);
     }, [language, watchingDir]);
+
 
 
     const clear = () => {

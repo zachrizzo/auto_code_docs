@@ -6,6 +6,11 @@ let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
 
+const languageExtensions = {
+    '.js': 'javascript',
+    '.py': 'python',
+    // Add more extensions and languages here if needed
+};
 
 export async function initializeParser() {
     await Parser.init({
@@ -15,16 +20,26 @@ export async function initializeParser() {
     });
 
     const JavaScript = await Parser.Language.load('dist/tree-sitter-javascript.wasm');
+    const Python = await Parser.Language.load('dist/tree-sitter-python.wasm');
+
     parsers.javascript = JavaScript;
+    parsers.python = Python;
 }
 
-export async function detectClassesAndFunctions(language, code, fileName, watchedDir) {
-    if (!parsers[language]) {
+export function detectLanguageFromFileName(fileName) {
+    const extension = fileName.slice(fileName.lastIndexOf('.'));
+    return languageExtensions[extension] || null;
+}
+
+export async function detectClassesAndFunctions(code, filePath, fileExtension, watchedDir) {
+    const language = detectLanguageFromExtension(fileExtension);
+
+    if (!language || !parsers[language]) {
         await initializeParser();
     }
 
     const results = {
-        fileName,
+        filePath,
         directRelationships: {},
         crossFileRelationships: {},
         allDeclarations: {},
@@ -36,42 +51,37 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
     const processedClasses = new Set();
 
     const parser = new Parser();
-    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, fileName);
+    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language);
 
     parser.setLanguage(parsers[language]);
 
     const tree = parser.parse(code);
     const cursor = tree.walk();
 
-
-
     currentAnalysisId++; // Increment for each new analysis
-
-
-
 
     ASTDetection.traverse(cursor);
 
     // Update globalResults
-    if (!globalResults[fileName]) {
-        globalResults[fileName] = {};
+    if (!globalResults[filePath]) {
+        globalResults[filePath] = {};
     }
 
     // Remove old declarations and relationships
-    for (const key in globalResults[fileName]) {
-        if (Array.isArray(globalResults[fileName][key])) {
-            globalResults[fileName][key] = globalResults[fileName][key].filter(item => item.analysisId === currentAnalysisId);
-        } else if (typeof globalResults[fileName][key] === 'object') {
-            for (const subKey in globalResults[fileName][key]) {
-                if (globalResults[fileName][key][subKey].analysisId !== currentAnalysisId) {
-                    delete globalResults[fileName][key][subKey];
+    for (const key in globalResults[filePath]) {
+        if (Array.isArray(globalResults[filePath][key])) {
+            globalResults[filePath][key] = globalResults[filePath][key].filter(item => item.analysisId === currentAnalysisId);
+        } else if (typeof globalResults[filePath][key] === 'object') {
+            for (const subKey in globalResults[filePath][key]) {
+                if (globalResults[filePath][key][subKey].analysisId !== currentAnalysisId) {
+                    delete globalResults[filePath][key][subKey];
                 }
             }
         }
     }
 
     // Merge new results
-    Object.assign(globalResults[fileName], results);
+    Object.assign(globalResults[filePath], results);
 
     // Clean up old global declarations
     for (const [name, declaration] of Object.entries(globalDeclarations)) {
@@ -81,6 +91,16 @@ export async function detectClassesAndFunctions(language, code, fileName, watche
     }
 
     return results;
+}
+
+export function detectLanguageFromExtension(extension) {
+    const languageMap = {
+        '.js': 'javascript',
+        '.py': 'python',
+        // Add more extensions and languages here if needed
+    };
+
+    return languageMap[extension] || null;
 }
 
 export function resolveCrossFileDependencies() {

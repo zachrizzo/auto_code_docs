@@ -1,7 +1,6 @@
 
 import crypto from 'crypto';
 import path from 'path';
-import * as Parser from 'web-tree-sitter';
 import FunctionHandler from './functions';
 import ClassHandler from './classes';
 
@@ -23,7 +22,7 @@ const langs = {
             'for_statement',           // Represents a for loop
         ]
     },
-    js: {
+    javascript: {
         functions: [
             'function_declaration',   // Function declaration
             'function_expression',    // Function expression
@@ -76,7 +75,7 @@ const langs = {
     // Add more languages as needed
 };
 class ASTDetectionHandler {
-    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'js') {
+    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python') {
         this.parser = parser;
         this.results = results;
         this.processedFunctions = processedFunctions || new Set();
@@ -139,7 +138,7 @@ class ASTDetectionHandler {
 
         const id = this.getUniqueId(code);
 
-        if (type === 'function' || type === 'method' || type === 'arrow_function') {
+        if (this.isFunctionNode(type)) {
             this.functionNameToId.set(name, id);
         }
 
@@ -159,8 +158,6 @@ class ASTDetectionHandler {
 
     traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
         // Initialize the stack to manage parent IDs
-
-
 
 
         do {
