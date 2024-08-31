@@ -16,6 +16,8 @@ import {
     DialogTitle,
 } from '@mui/material';
 import Store from 'electron-store';
+import { useTheme } from '@mui/material/styles';
+import FirebaseConfigModal from '../components/database/FirebaseConfigModal';
 
 // Initialize the store with a project name and defaults
 const store = new Store({
@@ -25,57 +27,14 @@ const store = new Store({
     },
 });
 
-const FirebaseConfigModal = ({ open, handleClose, firebaseConfig, setFirebaseConfig, handleSave, handleDelete }) => {
-    const handleChange = (e) => {
-        setFirebaseConfig({
-            ...firebaseConfig,
-            [e.target.name]: e.target.value,
-        });
-    };
 
-    return (
-        <Modal
-            open={open}
-            onClose={handleClose}
-            aria-labelledby="firebase-config-modal"
-            aria-describedby="firebase-configuration-modal"
-        >
-            <Container maxWidth="sm" style={{ backgroundColor: 'white', padding: '20px', marginTop: '100px' }}>
-                <Typography variant="h4" component="h1" gutterBottom>
-                    Firebase Configuration
-                </Typography>
-                {['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId', 'measurementId'].map((field) => (
-                    <TextField
-                        key={field}
-                        label={field.split(/(?=[A-Z])/).join(' ')}
-                        name={field}
-                        value={firebaseConfig?.[field] || ''}
-                        onChange={handleChange}
-                        fullWidth
-                        margin="normal"
-                        disabled={field === 'projectId' && firebaseConfig?.projectId}
-                    />
-                ))}
-                <Box mt={2}>
-                    <Button variant="contained" color="primary" onClick={handleSave}>
-                        Save Changes
-                    </Button>
-                    {firebaseConfig && firebaseConfig.projectId && (
-                        <Button variant="outlined" color="secondary" onClick={handleDelete} style={{ marginLeft: '10px' }}>
-                            Delete Configuration
-                        </Button>
-                    )}
-                </Box>
-            </Container>
-        </Modal>
-    );
-};
 
 const DatabaseManagementPage = () => {
     const [firebaseConfigs, setFirebaseConfigs] = useState([]);
     const [selectedConfig, setSelectedConfig] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
+    const theme = useTheme();
 
     useEffect(() => {
         const loadConfigs = () => {
@@ -166,7 +125,7 @@ const DatabaseManagementPage = () => {
     const handleCancelDelete = () => setOpenDeleteConfirm(false);
 
     return (
-        <Container maxWidth="md">
+        <Container maxWidth="full">
             <Box mt={4}>
                 <Typography variant="h4" component="h1" gutterBottom>
                     Database Management
@@ -174,9 +133,26 @@ const DatabaseManagementPage = () => {
                 <Button variant="contained" color="primary" onClick={() => handleOpenModal({})}>
                     Add New Configuration
                 </Button>
-                <Box mt={4} display="flex" flexWrap="wrap" gap={2}>
+                <Box
+                    mt={4}
+                    width={'100%'}
+                    display="flex"
+                    overflow={'auto'}
+                    flexDirection={'row'}
+                    backgroundColor={theme.palette.accentColor.main}
+                    padding={3}
+                    borderRadius={3}
+                    gap={2}
+                    sx={{
+                        scrollbarWidth: 'none', // For Firefox
+                        '&::-webkit-scrollbar': {
+                            display: 'none', // For Chrome, Safari, and Opera
+                        },
+                        msOverflowStyle: 'none',  // IE and Edge
+                    }}
+                >
                     {firebaseConfigs.map((config) => (
-                        <Card key={config.projectId} style={{ width: '300px' }}>
+                        <Card key={config.projectId} style={{ minWidth: '300px' }}>
                             <CardContent>
                                 <Typography variant="h6">Project ID: {config.projectId}</Typography>
                                 <Typography color="textSecondary">API Key: {config.apiKey}</Typography>

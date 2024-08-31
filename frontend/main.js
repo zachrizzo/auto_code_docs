@@ -10,19 +10,20 @@ app.commandLine.appendSwitch('remote-debugging-port', '9222');
 async function createWindow() {
     const isDev = (await import('electron-is-dev')).default;
 
+    // Dynamically import electron-store since it's an ESM
+    const { default: Store } = await import('electron-store');
+
+    // Initialize the store and set up renderer communication
+    Store.initRenderer();
+
     mainWindow = new BrowserWindow({
         width: 1500,
         height: 1000,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false
+            contextIsolation: false,
         }
     });
-
-    // mainWindow.webContents.openDevTools();
-    // mainWindow.loadURL('http://localhost:3001');
-
-
 
     mainWindow.loadURL(
         isDev
@@ -34,18 +35,18 @@ async function createWindow() {
         mainWindow.webContents.openDevTools();
     }
 
+    // Optional: Error handling for webContents
+    mainWindow.webContents.on('did-fail-load', () => {
+        mainWindow.loadURL('http://localhost:3001');
+    });
 
-    // mainWindow.webContents.on('did-fail-load', () => {
-    //     mainWindow.loadURL('http://localhost:3001');
-    // });
+    mainWindow.webContents.on('crashed', (event) => {
+        console.error('Renderer process crashed:', event);
+    });
 
-    // mainWindow.webContents.on('crashed', (event) => {
-    //     console.error('Renderer process crashed:', event);
-    // });
-
-    // process.on('uncaughtException', (error) => {
-    //     console.error('Uncaught exception:', error);
-    // });
+    process.on('uncaughtException', (error) => {
+        console.error('Uncaught exception:', error);
+    });
 }
 
 app.whenReady().then(() => {
@@ -97,5 +98,3 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
-
-
