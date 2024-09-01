@@ -27,8 +27,6 @@ import { useTheme } from '@mui/material/styles';
 import FirebaseConfigModal from '../components/database/FirebaseConfigModal';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
-
-// Initialize the store with a project name and defaults
 const store = new Store({
     name: 'FirebaseConfigManager',
     defaults: {
@@ -57,18 +55,18 @@ const CustomCard = ({ data, onSelect, selected, onEdit }) => {
     );
 };
 
-
-
 const DatabaseManagementPage = () => {
     const [firebaseConfigs, setFirebaseConfigs] = useState([]);
     const [selectedConfigs, setSelectedConfigs] = useState([]);
     const [selectedConfig, setSelectedConfig] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
-    const [collectionName, setCollectionName] = useState(''); // State for collection name input
-    const [discrepancies, setDiscrepancies] = useState([]); // State for storing discrepancies
-    const [serviceAccount, setServiceAccount] = useState(null); // State for service account JSON
+    const [collectionName, setCollectionName] = useState('');
+    const [discrepancies, setDiscrepancies] = useState([]);
+    const [serviceAccount, setServiceAccount] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [dbSchema, setDbSchema] = useState([]);
+    const [assumeSchema, setAssumeSchema] = useState(false);
 
     const theme = useTheme();
 
@@ -114,7 +112,7 @@ const DatabaseManagementPage = () => {
                 },
                 body: JSON.stringify({
                     collection_name: collectionName,
-                    service_account: serviceAccount, // Send the selected credentials
+                    service_account: serviceAccount,
                 }),
             });
 
@@ -124,16 +122,16 @@ const DatabaseManagementPage = () => {
 
             const data = await response.json();
 
-            // Check if discrepancies is defined and is an array
             if (data && data.discrepancies) {
                 setDiscrepancies(data.discrepancies);
-                console.log('Discrepancies:', data.discrepancies);
+                if (assumeSchema) {
+                    const assumedSchema = getAssumedSchema(data.discrepancies);
+                    setDbSchema(assumedSchema);
+                }
             } else if (data && data.error) {
-                // If there's an error key in the response, log or handle it
                 console.error('Error from API:', data.error);
                 alert(`Error from server: ${data.error}`);
             } else {
-                // Handle unexpected response structure
                 console.error('Unexpected response format:', data);
                 alert('Unexpected response format received from the server.');
             }
@@ -143,7 +141,6 @@ const DatabaseManagementPage = () => {
         } finally {
             setIsLoading(false);
         }
-
     };
 
     const handleServiceAccountUpload = (event) => {
@@ -162,8 +159,6 @@ const DatabaseManagementPage = () => {
         reader.readAsText(file);
         setIsLoading(false);
     };
-
-
 
     const handleSave = useCallback(() => {
         if (selectedConfig) {
@@ -192,14 +187,10 @@ const DatabaseManagementPage = () => {
     const handleDelete = () => setOpenDeleteConfirm(true);
 
     const confirmDelete = useCallback(() => {
-        console.log('Deleting config:', selectedConfig);
-
         if (selectedConfig) {
             const updatedConfigs = firebaseConfigs.filter((config) => config.projectId !== selectedConfig.projectId);
             setFirebaseConfigs(updatedConfigs);
             store.set('firebaseConfigs', updatedConfigs);
-
-            console.log('Configs after deletion:', updatedConfigs);
 
             setOpenDeleteConfirm(false);
             handleCloseModal();
@@ -214,16 +205,49 @@ const DatabaseManagementPage = () => {
     const handleSelectConfig = (config, isSelected) => {
         if (isSelected) {
             setSelectedConfigs((prev) => [...prev, config]);
-            setSelectedConfig(config); // Set the selected configuration when a card is selected
+            setSelectedConfig(config);
         } else {
             setSelectedConfigs((prev) => prev.filter((c) => c.projectId !== config.projectId));
-            setSelectedConfig(null); // Clear the selected configuration if no card is selected
+            setSelectedConfig(null);
         }
     };
 
-
     const truncate = (str, n) => {
         return (str.length > n) ? str.slice(0, n - 1) + '...' : str;
+    };
+
+    const getMissingFields = (structure) => {
+        return dbSchema.filter(field => !structure.includes(field));
+    };
+
+    const getAssumedSchema = (discrepancies) => {
+        if (!discrepancies.length) return [];
+
+        let maxFieldsDoc = discrepancies[0];
+
+        discrepancies.forEach(discrepancy => {
+            if (discrepancy.structure.length > maxFieldsDoc.structure.length) {
+                maxFieldsDoc = discrepancy;
+            }
+        });
+
+        return maxFieldsDoc.structure;
+    };
+
+    // Function to handle schema upload
+    const handleSchemaUpload = (event) => {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const schemaContent = JSON.parse(e.target.result);
+                setDbSchema(schemaContent.fields || []);
+            } catch (error) {
+                console.error('Error parsing schema file:', error);
+                alert('Invalid schema file. Please upload a valid JSON file.');
+            }
+        };
+        reader.readAsText(file);
     };
 
     return (
@@ -248,7 +272,7 @@ const DatabaseManagementPage = () => {
                         variant="contained"
                         color="primary"
                         onClick={compareFirestoreData}
-                        disabled={!serviceAccount} // Disable button if no service account JSON is uploaded
+                        disabled={!serviceAccount}
                     >
                         Fetch and Compare Documents
                     </Button>
@@ -261,6 +285,16 @@ const DatabaseManagementPage = () => {
                         </Typography>
                     )}
                 </Box>
+                <Box mt={2}>
+                    <Checkbox
+                        checked={assumeSchema}
+                        onChange={(e) => setAssumeSchema(e.target.checked)}
+                        color="primary"
+                    />
+                    <Typography variant="body2" color="textSecondary" display="inline">
+                        Assume schema based on the document with the most fields.
+                    </Typography>
+                </Box>
                 <Box
                     mt={4}
                     width={'100%'}
@@ -272,11 +306,11 @@ const DatabaseManagementPage = () => {
                     borderRadius={3}
                     gap={2}
                     sx={{
-                        scrollbarWidth: 'none', // For Firefox
+                        scrollbarWidth: 'none',
                         '&::-webkit-scrollbar': {
-                            display: 'none', // For Chrome, Safari, and Opera
+                            display: 'none',
                         },
-                        msOverflowStyle: 'none',  // IE and Edge
+                        msOverflowStyle: 'none',
                     }}
                 >
                     {firebaseConfigs.map((config) => (
@@ -317,6 +351,14 @@ const DatabaseManagementPage = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+                <Box mt={4}>
+                    <input type="file" accept=".json" onChange={handleSchemaUpload} />
+                    {dbSchema.length > 0 && (
+                        <Typography variant="body2" color="textSecondary">
+                            Database schema loaded ({dbSchema.length} fields).
+                        </Typography>
+                    )}
+                </Box>
                 {discrepancies && discrepancies.length > 0 ? (
                     <Box mt={4}>
                         <Card elevation={3}>
@@ -346,20 +388,16 @@ const DatabaseManagementPage = () => {
                                                         )) :
                                                         <Typography variant="body2">N/A</Typography>
                                                     }
+                                                    {dbSchema.length > 0 && getMissingFields(discrepancy.structure).map((item, i) => (
+                                                        <Chip
+                                                            key={`missing-${i}`}
+                                                            label={item}
+                                                            size="small"
+                                                            color="error"
+                                                            variant="outlined"
+                                                        />
+                                                    ))}
                                                 </Box>
-                                            </Box>
-                                            <Box>
-                                                <Typography variant="subtitle2" gutterBottom>Documents:</Typography>
-                                                <Paper style={{ maxHeight: 200, overflow: 'auto', backgroundColor: '#f5f5f5', padding: '8px' }}>
-                                                    {Array.isArray(discrepancy.documents) ?
-                                                        discrepancy.documents.map((doc, i) => (
-                                                            <Typography key={i} variant="body2" style={{ margin: '2px 0' }}>
-                                                                {doc}
-                                                            </Typography>
-                                                        )) :
-                                                        <Typography variant="body2">N/A</Typography>
-                                                    }
-                                                </Paper>
                                             </Box>
                                         </AccordionDetails>
                                     </Accordion>
