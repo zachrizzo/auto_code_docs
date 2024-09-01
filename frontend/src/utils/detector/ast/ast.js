@@ -184,45 +184,16 @@ class ASTDetectionHandler {
         return id;
     }
 
-    addFunctionCallRelationship(cursor, parentPath = '', parentId = null, isRootLevel = true) {
+    addFunctionCallRelationship(node) {
+        const callerNodeId = this.parentStack[this.parentStack.length - 1] || 'root';
+        const calledFunctionName = this.getCalledFunctionName(node);
 
-        const node = cursor.currentNode;
-        if (!node) return;
-
-        const nodeType = node.type;
-        const nodeCode = node.text;
-
-        const currentNodeId = this.getUniqueId(nodeCode);
-
-        const isCalledNode = this.isCalledNode(nodeType);
-
-        if (nodeType === 'program') {
-            if (cursor.gotoFirstChild()) {
-                this.addFunctionCallRelationship(cursor, parentPath, null, true);
-                cursor.gotoParent();
+        if (calledFunctionName) {
+            if (!this.results.functionCallRelationships[callerNodeId]) {
+                this.results.functionCallRelationships[callerNodeId] = new Set();
             }
-        } else if (isCalledNode) {
-            const callerNodeId = this.parentStack[this.parentStack.length - 1] || 'root'
-            const calledFunctionName = this.getCalledFunctionName(node);
-            try {
-                if (this.results.functionNameToId[calledFunctionName]) {
-                    if (!this.results.functionCallRelationships[callerNodeId]) {
-                        this.results.functionCallRelationships[callerNodeId] = new Set();
-                    }
-                    this.results.functionCallRelationships[callerNodeId].add(calledFunctionName);
-
-                }
-            } catch (error) {
-                console.warn(error, this.results.functionCallRelationships[callerNodeId], callerNodeId, calledFunctionName)
-            }
-
-            this.getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
-
-        } else {
-            this.getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
-
+            this.results.functionCallRelationships[callerNodeId].add(calledFunctionName);
         }
-
     }
 
 
@@ -233,9 +204,7 @@ class ASTDetectionHandler {
         }
     }
 
-    traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
-
-
+    traverseAndDetect(cursor, parentPath = '', parentId = null, isRootLevel = true) {
         do {
             const node = cursor.currentNode;
             if (!node) return;
@@ -251,7 +220,7 @@ class ASTDetectionHandler {
 
             if (nodeType === 'program') {
                 if (cursor.gotoFirstChild()) {
-                    this.traverse(cursor, parentPath, null, true);
+                    this.traverseAndDetect(cursor, parentPath, null, true);
                     cursor.gotoParent();
                 }
             } else if (isFunction || isClass) {
@@ -264,51 +233,50 @@ class ASTDetectionHandler {
                     this.addRootLevelRelationship(currentNodeId);
                 }
 
-                this.getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
+                if (cursor.gotoFirstChild()) {
+                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
+                    cursor.gotoParent();
+                }
 
                 this.parentStack.pop();
+            } else if (isCalledNode) {
+                this.addFunctionCallRelationship(node);
+
+                if (cursor.gotoFirstChild()) {
+                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+                    cursor.gotoParent();
+                }
             } else {
-                this.getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+                if (cursor.gotoFirstChild()) {
+                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+                    cursor.gotoParent();
+                }
             }
 
         } while (cursor.gotoNextSibling());
-
     }
 
     getCalledFunctionName(node) {
-        let name = null;
-
-        if (node.childCount > 0) {
-            const firstChild = node.child(0);
-
-            if (firstChild.type === 'identifier') {
-                name = firstChild.text;
-            } else if (firstChild.type === 'member_expression') {
-                // Handle method calls like obj.method()
-                if (firstChild.childCount >= 2) {
-                    name = firstChild.child(1).text;
+        if (node.type === 'call_expression') {
+            const functionNode = node.child(0);
+            if (functionNode) {
+                if (functionNode.type === 'identifier') {
+                    return functionNode.text;
+                } else if (functionNode.type === 'member_expression') {
+                    const objectName = functionNode.child(0).text;
+                    const propertyName = functionNode.child(1).text;
+                    return `${objectName}.${propertyName}`;
                 }
             }
         }
-
-        // Ensure name is always a string
-        if (Array.isArray(name)) {
-            name = name.join(''); // Convert array to string by joining elements
-        }
-
-        console.log('thsi is name:', name)
-
-        return name;
+        return null;
     }
 
 
-    finalizeRelationships(cursor) {
-        this.addFunctionCallRelationship(cursor)
-
-        if (this.results.functionCallRelationships) {
-            for (const [key, value] of Object.entries(this.results.functionCallRelationships)) {
-                this.results.functionCallRelationships[key] = Array.from(value);
-            }
+    finalizeRelationships() {
+        // Convert Sets to Arrays in functionCallRelationships
+        for (const [callerId, calledFunctions] of Object.entries(this.results.functionCallRelationships)) {
+            this.results.functionCallRelationships[callerId] = Array.from(calledFunctions);
         }
     }
 }

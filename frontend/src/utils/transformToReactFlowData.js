@@ -32,11 +32,6 @@ export async function transformToReactFlowData(parsedData) {
 
     // Create nodes
     for (const [fileName, fileData] of Object.entries(parsedData)) {
-        if (!fileData || typeof fileData !== 'object') {
-            console.error('Invalid file data for:', fileName);
-            continue;
-        }
-
         const fileNodeId = `file-${getFileName(fileName)}`;
         nodes.push(createNode(fileNodeId, getFileName(fileName)));
         nodeSet.add(fileNodeId);
@@ -56,13 +51,6 @@ export async function transformToReactFlowData(parsedData) {
         (fileData.rootFunctionIds || []).forEach(id =>
             safeAddEdge(fileNodeId, id, { type: 'declaration' }, edges, nodeSet));
 
-        // Add this new section to connect file nodes to class nodes
-        (fileData.classes || []).forEach(classData => {
-            if (classData.id) {
-                safeAddEdge(fileNodeId, classData.id, { type: 'declaration' }, edges, nodeSet);
-            }
-        });
-
         // Add direct relationships
         for (const [sourceId, targetIds] of Object.entries(fileData.directRelationships || {})) {
             if (Array.isArray(targetIds)) {
@@ -71,31 +59,30 @@ export async function transformToReactFlowData(parsedData) {
             }
         }
 
-        // Add edges for methods to their parent class
-        (fileData.methods || []).forEach(method => {
-            if (method.parentClassId) {
-                safeAddEdge(method.parentClassId, method.id, { type: 'declaration' }, edges, nodeSet);
-            }
-        });
-
-
-        // Add edges for function calls
-        for (const [calledFunctionId, callerIds] of Object.entries(fileData.functionCallRelationships || {})) {
-            if (Array.isArray(callerIds)) {
-                callerIds.forEach(callerId => {
-                    if (callerId !== 'top-level') {
-                        safeAddEdge(calledFunctionId, callerId, { type: 'call' }, edges, nodeSet);
+        // Add function call relationships
+        for (const [callerFunctionId, calledFunctions] of Object.entries(fileData.functionCallRelationships || {})) {
+            if (Array.isArray(calledFunctions)) {
+                calledFunctions.forEach(calledFunction => {
+                    const calledFunctionId = fileData.functionNameToId[calledFunction]?.[0];
+                    if (calledFunctionId) {
+                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
+                    } else {
+                        // This might be a cross-file call, but we can't determine it from the current structure
+                        console.warn(`Function call target not found in the same file: ${calledFunction}`);
                     }
                 });
             }
         }
+    }
 
-        // Add cross-file relationships (flipped)
-        for (const [entityType, entities] of Object.entries(fileData.crossFileRelationships || {})) {
-            for (const [sourceId, targetIds] of Object.entries(entities)) {
+    // Add cross-file relationships
+    for (const [fileName, fileData] of Object.entries(parsedData)) {
+        for (const [sourceId, relationships] of Object.entries(fileData.crossFileRelationships || {})) {
+            for (const [targetFileName, targetIds] of Object.entries(relationships)) {
                 if (Array.isArray(targetIds)) {
-                    targetIds.forEach(targetId =>
-                        safeAddEdge(targetId, sourceId, { type: 'crossFileCall' }, edges, nodeSet));
+                    targetIds.forEach(targetId => {
+                        safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }, edges, nodeSet);
+                    });
                 }
             }
         }

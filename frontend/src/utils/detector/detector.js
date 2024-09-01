@@ -46,7 +46,7 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         recursiveRelationships: [],
         analysisId: currentAnalysisId,
         rootFunctionIds: [],
-        functionCallRelationships: {}, // Initialize as an empty object
+        functionCallRelationships: {},
         functionNameToId: {}
     };
 
@@ -61,11 +61,15 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
     const tree = parser.parse(code);
     const cursor = tree.walk();
 
-    currentAnalysisId++; // Increment for each new analysis
+    // Single pass: Detect functions, classes, and function calls
+    ASTDetection.traverseAndDetect(cursor);
 
-    ASTDetection.traverse(cursor);
-    cursor.gotoFirstChild()
-    ASTDetection.finalizeRelationships(cursor)
+    currentAnalysisId++;
+
+    ASTDetection.finalizeRelationships();
+    currentAnalysisId++;
+
+    ASTDetection.finalizeRelationships();
 
     // Update globalResults
     if (!globalResults[filePath]) {
@@ -140,58 +144,34 @@ export function resolveCrossFileDependencies() {
     // Resolve cross-file relationships
     for (const [fileName, fileResults] of Object.entries(globalResults)) {
         fileResults.crossFileRelationships = {};
-        fileResults.functionCallRelationships = {};
 
-        const checkForCalls = (entity, entityId, entityType) => {
-            if (!entity || !entity.code) return;
-            const calls = entity.code.match(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g) || [];
-            calls.forEach(call => {
-                const callName = call.trim().slice(0, -1);
-                const calledFunction = allFunctions.get(callName);
-                if (calledFunction && calledFunction.id !== entityId) {
-                    // Record all function calls
-                    if (!fileResults.functionCallRelationships[entityId]) {
-                        fileResults.functionCallRelationships[entityId] = [];
+        // Preserve existing functionCallRelationships
+        const existingFunctionCallRelationships = fileResults.functionCallRelationships || {};
+
+        for (const [callerId, calledFunctions] of Object.entries(existingFunctionCallRelationships)) {
+            for (const calledFunction of calledFunctions) {
+                const calledFunctionInfo = allFunctions.get(calledFunction);
+                if (calledFunctionInfo) {
+                    // Update functionCallRelationships with function IDs
+                    if (!fileResults.functionCallRelationships[callerId]) {
+                        fileResults.functionCallRelationships[callerId] = [];
                     }
-                    if (!fileResults.functionCallRelationships[entityId].includes(calledFunction.id)) {
-                        fileResults.functionCallRelationships[entityId].push(calledFunction.id);
+                    if (!fileResults.functionCallRelationships[callerId].includes(calledFunctionInfo.id)) {
+                        fileResults.functionCallRelationships[callerId].push(calledFunctionInfo.id);
                     }
 
                     // Record cross-file calls
-                    if (calledFunction.fileName !== fileName) {
-                        if (!fileResults.crossFileRelationships[entityType]) {
-                            fileResults.crossFileRelationships[entityType] = {};
+                    if (calledFunctionInfo.fileName !== fileName) {
+                        if (!fileResults.crossFileRelationships[callerId]) {
+                            fileResults.crossFileRelationships[callerId] = [];
                         }
-                        if (!fileResults.crossFileRelationships[entityType][entityId]) {
-                            fileResults.crossFileRelationships[entityType][entityId] = [];
-                        }
-                        if (!fileResults.crossFileRelationships[entityType][entityId].includes(calledFunction.id)) {
-                            fileResults.crossFileRelationships[entityType][entityId].push(calledFunction.id);
+                        if (!fileResults.crossFileRelationships[callerId].includes(calledFunctionInfo.id)) {
+                            fileResults.crossFileRelationships[callerId].push(calledFunctionInfo.id);
                         }
                     }
                 }
-            });
-        };
-
-        // Check functions
-        fileResults.functions?.forEach(func => {
-            const funcDeclaration = fileResults.allDeclarations[func.id];
-            if (funcDeclaration) {
-                checkForCalls(funcDeclaration, funcDeclaration.id, 'functions');
             }
-        });
-
-        // Check classes and their methods
-        fileResults.classes?.forEach(cls => {
-            const classDeclaration = fileResults.allDeclarations[cls.id];
-            if (classDeclaration) {
-                Object.values(fileResults.allDeclarations)
-                    .filter(decl => decl.path && decl.path.startsWith(`${classDeclaration.path}-`) && decl.type === 'function')
-                    .forEach(method => {
-                        checkForCalls(method, method.id, `classes.${classDeclaration.name}.methods`);
-                    });
-            }
-        });
+        }
 
         // Clean up any null keys in directRelationships
         if (fileResults.directRelationships && 'null' in fileResults.directRelationships) {
