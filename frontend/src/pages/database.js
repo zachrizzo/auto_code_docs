@@ -5,59 +5,86 @@ import {
     Container,
     Typography,
     Box,
-    Modal,
     Card,
     CardContent,
     CardActions,
+    Checkbox,
     Dialog,
     DialogActions,
     DialogContent,
     DialogContentText,
     DialogTitle,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails,
+    Chip,
+    Divider,
+    Tooltip,
+    Paper
 } from '@mui/material';
 import Store from 'electron-store';
 import { useTheme } from '@mui/material/styles';
 import FirebaseConfigModal from '../components/database/FirebaseConfigModal';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+
 
 // Initialize the store with a project name and defaults
 const store = new Store({
-    name: 'FirebaseConfigManager',  // Replace 'YourProjectName' with your actual project name
+    name: 'FirebaseConfigManager',
     defaults: {
         firebaseConfigs: [],
     },
 });
 
+const CustomCard = ({ data, onSelect, selected, onEdit }) => {
+    return (
+        <Card style={{ minWidth: '300px' }}>
+            <CardContent>
+                <Checkbox
+                    checked={selected}
+                    onChange={(e) => onSelect(data, e.target.checked)}
+                />
+                <Typography variant="h6">Project ID: {data.projectId}</Typography>
+                <Typography color="textSecondary">API Key: {data.apiKey}</Typography>
+                <Typography color="textSecondary">Auth Domain: {data.authDomain}</Typography>
+            </CardContent>
+            <CardActions>
+                <Button size="small" color="primary" onClick={() => onEdit(data)}>
+                    Edit
+                </Button>
+            </CardActions>
+        </Card>
+    );
+};
+
 
 
 const DatabaseManagementPage = () => {
     const [firebaseConfigs, setFirebaseConfigs] = useState([]);
+    const [selectedConfigs, setSelectedConfigs] = useState([]);
     const [selectedConfig, setSelectedConfig] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
+    const [collectionName, setCollectionName] = useState(''); // State for collection name input
+    const [discrepancies, setDiscrepancies] = useState([]); // State for storing discrepancies
+    const [serviceAccount, setServiceAccount] = useState(null); // State for service account JSON
+    const [isLoading, setIsLoading] = useState(true);
+
     const theme = useTheme();
 
     useEffect(() => {
         const loadConfigs = () => {
             const savedConfigs = store.get('firebaseConfigs');
-            console.log('Loaded configs from store:', savedConfigs);
-            console.log('Store path:', store.path);
             setFirebaseConfigs(Array.isArray(savedConfigs) ? savedConfigs : []);
         };
 
         loadConfigs();
 
-        // Listen for changes in the store
         const unsubscribe = store.onDidChange('firebaseConfigs', loadConfigs);
-
-        return () => {
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }, []);
 
-
-
     const handleOpenModal = (config) => {
-        console.log('Opening modal with config:', config);
         setSelectedConfig(config);
         setOpenModal(true);
     };
@@ -67,33 +94,93 @@ const DatabaseManagementPage = () => {
         setSelectedConfig(null);
     };
 
-    const handleSave = useCallback(() => {
-        console.log('Saving config:', selectedConfig);
+    const compareFirestoreData = async () => {
+        setIsLoading(true);
+        if (!serviceAccount) {
+            alert('Please upload a Firebase service account JSON file.');
+            return;
+        }
 
+        if (!collectionName) {
+            alert('Please enter a collection name.');
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:8000/compare-documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    collection_name: collectionName,
+                    service_account: serviceAccount, // Send the selected credentials
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch discrepancies');
+            }
+
+            const data = await response.json();
+
+            // Check if discrepancies is defined and is an array
+            if (data && data.discrepancies) {
+                setDiscrepancies(data.discrepancies);
+                console.log('Discrepancies:', data.discrepancies);
+            } else if (data && data.error) {
+                // If there's an error key in the response, log or handle it
+                console.error('Error from API:', data.error);
+                alert(`Error from server: ${data.error}`);
+            } else {
+                // Handle unexpected response structure
+                console.error('Unexpected response format:', data);
+                alert('Unexpected response format received from the server.');
+            }
+        } catch (error) {
+            console.error('Error comparing Firestore data:', error);
+            alert(`Error comparing Firestore data: ${error.message}`);
+        } finally {
+            setIsLoading(false);
+        }
+
+    };
+
+    const handleServiceAccountUpload = (event) => {
+        setIsLoading(true);
+        const file = event.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const jsonContent = JSON.parse(e.target.result);
+                setServiceAccount(jsonContent);
+            } catch (error) {
+                console.error('Error parsing JSON file:', error);
+                alert('Invalid JSON file. Please upload a valid Firebase service account JSON file.');
+            }
+        };
+        reader.readAsText(file);
+        setIsLoading(false);
+    };
+
+
+
+    const handleSave = useCallback(() => {
         if (selectedConfig) {
             let updatedConfigs;
             const existingConfigIndex = firebaseConfigs.findIndex(config => config.projectId === selectedConfig.projectId);
 
             if (existingConfigIndex !== -1) {
-                // Existing config
                 updatedConfigs = firebaseConfigs.map((config, index) =>
                     index === existingConfigIndex ? selectedConfig : config
                 );
-                console.log('Updating existing config');
             } else {
-                // New config
                 const newConfig = { ...selectedConfig, projectId: selectedConfig.projectId || `project-${Date.now()}` };
                 updatedConfigs = [...firebaseConfigs, newConfig];
-                console.log('Adding new config');
             }
-
-            console.log('Before update - firebaseConfigs:', firebaseConfigs);
-            console.log('Updated configs to be saved:', updatedConfigs);
 
             setFirebaseConfigs(updatedConfigs);
             store.set('firebaseConfigs', updatedConfigs);
-
-            console.log('After update - Store contents:', store.get('firebaseConfigs'));
 
             handleCloseModal();
             alert(`Firebase configuration ${existingConfigIndex !== -1 ? 'updated' : 'added'} successfully!`);
@@ -105,14 +192,14 @@ const DatabaseManagementPage = () => {
     const handleDelete = () => setOpenDeleteConfirm(true);
 
     const confirmDelete = useCallback(() => {
-        console.log('Deleting config:', selectedConfig); // Debugging
+        console.log('Deleting config:', selectedConfig);
 
         if (selectedConfig) {
             const updatedConfigs = firebaseConfigs.filter((config) => config.projectId !== selectedConfig.projectId);
             setFirebaseConfigs(updatedConfigs);
-            store.set('firebaseConfigs', updatedConfigs);  // Persist the updated configurations to the store
+            store.set('firebaseConfigs', updatedConfigs);
 
-            console.log('Configs after deletion:', updatedConfigs); // Debugging
+            console.log('Configs after deletion:', updatedConfigs);
 
             setOpenDeleteConfirm(false);
             handleCloseModal();
@@ -124,6 +211,21 @@ const DatabaseManagementPage = () => {
 
     const handleCancelDelete = () => setOpenDeleteConfirm(false);
 
+    const handleSelectConfig = (config, isSelected) => {
+        if (isSelected) {
+            setSelectedConfigs((prev) => [...prev, config]);
+            setSelectedConfig(config); // Set the selected configuration when a card is selected
+        } else {
+            setSelectedConfigs((prev) => prev.filter((c) => c.projectId !== config.projectId));
+            setSelectedConfig(null); // Clear the selected configuration if no card is selected
+        }
+    };
+
+
+    const truncate = (str, n) => {
+        return (str.length > n) ? str.slice(0, n - 1) + '...' : str;
+    };
+
     return (
         <Container maxWidth="full">
             <Box mt={4}>
@@ -133,6 +235,32 @@ const DatabaseManagementPage = () => {
                 <Button variant="contained" color="primary" onClick={() => handleOpenModal({})}>
                     Add New Configuration
                 </Button>
+                <Box mt={4}>
+                    <TextField
+                        label="Collection Name"
+                        variant="outlined"
+                        value={collectionName}
+                        onChange={(e) => setCollectionName(e.target.value)}
+                        fullWidth
+                        margin="normal"
+                    />
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={compareFirestoreData}
+                        disabled={!serviceAccount} // Disable button if no service account JSON is uploaded
+                    >
+                        Fetch and Compare Documents
+                    </Button>
+                </Box>
+                <Box mt={4}>
+                    <input type="file" accept=".json" onChange={handleServiceAccountUpload} />
+                    {serviceAccount && (
+                        <Typography variant="body2" color="textSecondary">
+                            Service account JSON loaded.
+                        </Typography>
+                    )}
+                </Box>
                 <Box
                     mt={4}
                     width={'100%'}
@@ -152,18 +280,13 @@ const DatabaseManagementPage = () => {
                     }}
                 >
                     {firebaseConfigs.map((config) => (
-                        <Card key={config.projectId} style={{ minWidth: '300px' }}>
-                            <CardContent>
-                                <Typography variant="h6">Project ID: {config.projectId}</Typography>
-                                <Typography color="textSecondary">API Key: {config.apiKey}</Typography>
-                                <Typography color="textSecondary">Auth Domain: {config.authDomain}</Typography>
-                            </CardContent>
-                            <CardActions>
-                                <Button size="small" color="primary" onClick={() => handleOpenModal(config)}>
-                                    Edit
-                                </Button>
-                            </CardActions>
-                        </Card>
+                        <CustomCard
+                            key={config.projectId}
+                            data={config}
+                            selected={selectedConfigs.some(c => c.projectId === config.projectId)}
+                            onSelect={handleSelectConfig}
+                            onEdit={handleOpenModal}
+                        />
                     ))}
                 </Box>
                 <FirebaseConfigModal
@@ -194,6 +317,63 @@ const DatabaseManagementPage = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+                {discrepancies && discrepancies.length > 0 ? (
+                    <Box mt={4}>
+                        <Card elevation={3}>
+                            <CardContent>
+                                <Typography variant="h5" gutterBottom>Document Type Discrepancies</Typography>
+                                <Divider style={{ marginBottom: '1rem' }} />
+                                {discrepancies.map((discrepancy, index) => (
+                                    <Accordion key={index}>
+                                        <AccordionSummary
+                                            expandIcon={<ExpandMoreIcon />}
+                                            aria-controls={`panel${index}a-content`}
+                                            id={`panel${index}a-header`}
+                                        >
+                                            <Tooltip title={discrepancy.type || 'Unknown'}>
+                                                <Typography variant="subtitle1">
+                                                    Type: {truncate(discrepancy.type || 'Unknown', 50)}
+                                                </Typography>
+                                            </Tooltip>
+                                        </AccordionSummary>
+                                        <AccordionDetails>
+                                            <Box mb={2}>
+                                                <Typography variant="subtitle2" gutterBottom>Structure:</Typography>
+                                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                                    {Array.isArray(discrepancy.structure) ?
+                                                        discrepancy.structure.map((item, i) => (
+                                                            <Chip key={i} label={item} size="small" />
+                                                        )) :
+                                                        <Typography variant="body2">N/A</Typography>
+                                                    }
+                                                </Box>
+                                            </Box>
+                                            <Box>
+                                                <Typography variant="subtitle2" gutterBottom>Documents:</Typography>
+                                                <Paper style={{ maxHeight: 200, overflow: 'auto', backgroundColor: '#f5f5f5', padding: '8px' }}>
+                                                    {Array.isArray(discrepancy.documents) ?
+                                                        discrepancy.documents.map((doc, i) => (
+                                                            <Typography key={i} variant="body2" style={{ margin: '2px 0' }}>
+                                                                {doc}
+                                                            </Typography>
+                                                        )) :
+                                                        <Typography variant="body2">N/A</Typography>
+                                                    }
+                                                </Paper>
+                                            </Box>
+                                        </AccordionDetails>
+                                    </Accordion>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </Box>
+                ) : (
+                    <Card elevation={3} style={{ marginTop: '1rem' }}>
+                        <CardContent>
+                            <Typography variant="body1">No discrepancies found.</Typography>
+                        </CardContent>
+                    </Card>
+                )}
             </Box>
         </Container>
     );
