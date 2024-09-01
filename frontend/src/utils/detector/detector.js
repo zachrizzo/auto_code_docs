@@ -64,6 +64,8 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
     currentAnalysisId++; // Increment for each new analysis
 
     ASTDetection.traverse(cursor);
+    cursor.gotoFirstChild()
+    ASTDetection.finalizeRelationships(cursor)
 
     // Update globalResults
     if (!globalResults[filePath]) {
@@ -86,6 +88,12 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
     // Merge new results
     Object.assign(globalResults[filePath], results);
 
+    // Ensure we're not overwriting functionCallRelationships if it already exists
+    if (!globalResults[filePath].functionCallRelationships) {
+        globalResults[filePath].functionCallRelationships = {};
+    }
+    Object.assign(globalResults[filePath].functionCallRelationships, results.functionCallRelationships);
+
     // Clean up old global declarations
     for (const [name, declaration] of Object.entries(globalDeclarations)) {
         if (declaration.analysisId !== currentAnalysisId) {
@@ -107,11 +115,9 @@ export function detectLanguageFromExtension(extension) {
 }
 
 export function resolveCrossFileDependencies() {
-    const resolvedResults = JSON.parse(JSON.stringify(globalResults));
-
     // Create a global map of all functions
     const allFunctions = new Map();
-    for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
+    for (const [fileName, fileResults] of Object.entries(globalResults)) {
         fileResults.functions?.forEach(func => {
             const declaration = fileResults.allDeclarations[func.id];
             if (declaration) {
@@ -132,7 +138,7 @@ export function resolveCrossFileDependencies() {
     }
 
     // Resolve cross-file relationships
-    for (const [fileName, fileResults] of Object.entries(resolvedResults)) {
+    for (const [fileName, fileResults] of Object.entries(globalResults)) {
         fileResults.crossFileRelationships = {};
         fileResults.functionCallRelationships = {};
 
@@ -203,7 +209,7 @@ export function resolveCrossFileDependencies() {
         }
     }
 
-    console.log("Resolved Results:", resolvedResults);
+    console.log("Updated globalResults:", globalResults);
 
-    return resolvedResults;
+    return globalResults;
 }

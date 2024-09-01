@@ -107,6 +107,7 @@ class ASTDetectionHandler {
 
         this.parentStack = [];
 
+        this.results.functionCallRelationships = this.results.functionCallRelationships || {};
 
 
         this.functionHandler = new FunctionHandler(this);
@@ -183,24 +184,56 @@ class ASTDetectionHandler {
         return id;
     }
 
-    addFunctionCallRelationship(callerNodeId, calledFunctionName) {
-        if (!this.results.functionCallRelationships[callerNodeId]) {
-            this.results.functionCallRelationships[callerNodeId] = new Set();
+    addFunctionCallRelationship(cursor, parentPath = '', parentId = null, isRootLevel = true) {
+
+        const node = cursor.currentNode;
+        if (!node) return;
+
+        const nodeType = node.type;
+        const nodeCode = node.text;
+
+        const currentNodeId = this.getUniqueId(nodeCode);
+
+        const isCalledNode = this.isCalledNode(nodeType);
+
+        if (nodeType === 'program') {
+            if (cursor.gotoFirstChild()) {
+                this.addFunctionCallRelationship(cursor, parentPath, null, true);
+                cursor.gotoParent();
+            }
+        } else if (isCalledNode) {
+            const callerNodeId = this.parentStack[this.parentStack.length - 1] || 'root'
+            const calledFunctionName = this.getCalledFunctionName(node);
+            try {
+                if (this.results.functionNameToId[calledFunctionName]) {
+                    if (!this.results.functionCallRelationships[callerNodeId]) {
+                        this.results.functionCallRelationships[callerNodeId] = new Set();
+                    }
+                    this.results.functionCallRelationships[callerNodeId].add(calledFunctionName);
+
+                }
+            } catch (error) {
+                console.warn(error, this.results.functionCallRelationships[callerNodeId], callerNodeId, calledFunctionName)
+            }
+
+            this.getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
+
+        } else {
+            this.getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+
         }
-        this.results.functionCallRelationships[callerNodeId].add(calledFunctionName);
+
+    }
+
+
+    getChildNodes = (cursor, parentPath = '', parentId = null, isRootLevel = true) => {
+        if (cursor.gotoFirstChild()) {
+            this.traverse(cursor, parentPath, parentId, isRootLevel);
+            cursor.gotoParent();
+        }
     }
 
     traverse(cursor, parentPath = '', parentId = null, isRootLevel = true) {
-        // Initialize the stack to manage parent IDs
-
-        const getChildNodes = (cursor, parentPath = '', parentId = null, isRootLevel = true) => {
-            if (cursor.gotoFirstChild()) {
-                // Traverse child nodes with updated parentNodeId
-                this.traverse(cursor, parentPath, parentId, isRootLevel);
-                cursor.gotoParent();
-            }
-
-        }
 
 
         do {
@@ -209,57 +242,69 @@ class ASTDetectionHandler {
 
             const nodeType = node.type;
             const nodeCode = node.text;
+
             const currentNodeId = this.getUniqueId(nodeCode);
 
             const isFunction = this.isFunctionNode(nodeType);
             const isClass = this.isClassNode(nodeType);
             const isCalledNode = this.isCalledNode(nodeType);
 
-            // Handle 'program' node type
             if (nodeType === 'program') {
                 if (cursor.gotoFirstChild()) {
                     this.traverse(cursor, parentPath, null, true);
                     cursor.gotoParent();
                 }
             } else if (isFunction || isClass) {
-                // Handle function and class nodes
                 if (isFunction) this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
-
                 if (isClass) this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
 
-                // Update parentNodeId to current node's ID for child nodes
                 this.parentStack.push(currentNodeId);
 
                 if (isRootLevel) {
                     this.addRootLevelRelationship(currentNodeId);
                 }
 
+                this.getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false);
 
-                // Traverse child nodes with updated parentNodeId
-                getChildNodes(cursor, `${parentPath}${nodeType}-`, currentNodeId, false)
-
-
-                // Pop the parent ID from the stack when backtracking
                 this.parentStack.pop();
-
-            } else if (isCalledNode) {
-
-
-
             } else {
-
-                // Traverse child nodes, keeping the parentId from the stack
-                getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
-
+                this.getChildNodes(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
             }
 
         } while (cursor.gotoNextSibling());
 
-        this.finalizeRelationships();
+    }
+
+    getCalledFunctionName(node) {
+        let name = null;
+
+        if (node.childCount > 0) {
+            const firstChild = node.child(0);
+
+            if (firstChild.type === 'identifier') {
+                name = firstChild.text;
+            } else if (firstChild.type === 'member_expression') {
+                // Handle method calls like obj.method()
+                if (firstChild.childCount >= 2) {
+                    name = firstChild.child(1).text;
+                }
+            }
+        }
+
+        // Ensure name is always a string
+        if (Array.isArray(name)) {
+            name = name.join(''); // Convert array to string by joining elements
+        }
+
+        console.log('thsi is name:', name)
+
+        return name;
     }
 
 
-    finalizeRelationships() {
+    finalizeRelationships(cursor) {
+        this.addFunctionCallRelationship(cursor)
+
         if (this.results.functionCallRelationships) {
             for (const [key, value] of Object.entries(this.results.functionCallRelationships)) {
                 this.results.functionCallRelationships[key] = Array.from(value);
