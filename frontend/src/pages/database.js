@@ -220,6 +220,10 @@ const DatabaseManagementPage = () => {
         return dbSchema.filter(field => !structure.includes(field));
     };
 
+    const getExtraFields = (structure) => {
+        return structure.filter(field => !dbSchema.includes(field));
+    };
+
     const getAssumedSchema = (discrepancies) => {
         if (!discrepancies.length) return [];
 
@@ -233,7 +237,6 @@ const DatabaseManagementPage = () => {
 
         return maxFieldsDoc.structure;
     };
-
     // Function to handle schema upload
     const handleSchemaUpload = (event) => {
         const file = event.target.files[0];
@@ -256,9 +259,7 @@ const DatabaseManagementPage = () => {
                 <Typography variant="h4" component="h1" gutterBottom>
                     Database Management
                 </Typography>
-                <Button variant="contained" color="primary" onClick={() => handleOpenModal({})}>
-                    Add New Configuration
-                </Button>
+
                 <Box mt={4}>
                     <TextField
                         label="Collection Name"
@@ -269,6 +270,7 @@ const DatabaseManagementPage = () => {
                         margin="normal"
                     />
                     <Button
+                        sx={{ marginY: 2 }}
                         variant="contained"
                         color="primary"
                         onClick={compareFirestoreData}
@@ -285,17 +287,8 @@ const DatabaseManagementPage = () => {
                         </Typography>
                     )}
                 </Box>
-                <Box mt={2}>
-                    <Checkbox
-                        checked={assumeSchema}
-                        onChange={(e) => setAssumeSchema(e.target.checked)}
-                        color="primary"
-                    />
-                    <Typography variant="body2" color="textSecondary" display="inline">
-                        Assume schema based on the document with the most fields.
-                    </Typography>
-                </Box>
-                <Box
+
+                {/* <Box
                     mt={4}
                     width={'100%'}
                     display="flex"
@@ -322,15 +315,15 @@ const DatabaseManagementPage = () => {
                             onEdit={handleOpenModal}
                         />
                     ))}
-                </Box>
-                <FirebaseConfigModal
+                </Box> */}
+                {/* <FirebaseConfigModal
                     open={openModal}
                     handleClose={handleCloseModal}
                     firebaseConfig={selectedConfig}
                     setFirebaseConfig={setSelectedConfig}
                     handleSave={handleSave}
                     handleDelete={handleDelete}
-                />
+                /> */}
                 <Dialog
                     open={openDeleteConfirm}
                     onClose={handleCancelDelete}
@@ -351,6 +344,7 @@ const DatabaseManagementPage = () => {
                         </Button>
                     </DialogActions>
                 </Dialog>
+
                 <Box mt={4}>
                     <input type="file" accept=".json" onChange={handleSchemaUpload} />
                     {dbSchema.length > 0 && (
@@ -358,6 +352,16 @@ const DatabaseManagementPage = () => {
                             Database schema loaded ({dbSchema.length} fields).
                         </Typography>
                     )}
+                </Box>
+                <Box mt={2}>
+                    <Checkbox
+                        checked={assumeSchema}
+                        onChange={(e) => setAssumeSchema(e.target.checked)}
+                        color="primary"
+                    />
+                    <Typography variant="body2" color="textSecondary" display="inline">
+                        Assume schema based on the document with the most fields.
+                    </Typography>
                 </Box>
                 {discrepancies && discrepancies.length > 0 ? (
                     <Box mt={4}>
@@ -383,9 +387,26 @@ const DatabaseManagementPage = () => {
                                                 <Typography variant="subtitle2" gutterBottom>Structure:</Typography>
                                                 <Box display="flex" flexWrap="wrap" gap={1}>
                                                     {Array.isArray(discrepancy.structure) ?
-                                                        discrepancy.structure.map((item, i) => (
-                                                            <Chip key={i} label={item} size="small" />
-                                                        )) :
+                                                        discrepancy.structure.map((item, i) => {
+                                                            if (!dbSchema.includes(item)) {
+                                                                return (
+                                                                    <Chip
+                                                                        key={`extra-${i}`}
+                                                                        label={item}
+                                                                        size="small"
+                                                                        color="warning"
+                                                                        variant="outlined"
+                                                                    />
+                                                                );
+                                                            }
+                                                            return (
+                                                                <Chip
+                                                                    key={i}
+                                                                    label={item}
+                                                                    size="small"
+                                                                />
+                                                            );
+                                                        }) :
                                                         <Typography variant="body2">N/A</Typography>
                                                     }
                                                     {dbSchema.length > 0 && getMissingFields(discrepancy.structure).map((item, i) => (
@@ -399,7 +420,25 @@ const DatabaseManagementPage = () => {
                                                     ))}
                                                 </Box>
                                             </Box>
+                                            <Box>
+                                                <Typography variant="subtitle2" gutterBottom>Documents: {discrepancy.documents.length}</Typography>
+                                                <Paper style={{ maxHeight: 200, overflow: 'auto', background: theme.palette.accentColor.main, padding: '8px' }}>
+                                                    {Array.isArray(discrepancy.documents) ? (
+                                                        discrepancy.documents.map((doc, i) => (
+                                                            <Chip
+                                                                key={i}
+                                                                label={doc}
+                                                                variant="outlined"
+                                                                style={{ margin: '2px 4px' }}
+                                                            />
+                                                        ))
+                                                    ) : (
+                                                        <Chip label="N/A" variant="outlined" />
+                                                    )}
+                                                </Paper>
+                                            </Box>
                                         </AccordionDetails>
+
                                     </Accordion>
                                 ))}
                             </CardContent>
@@ -413,7 +452,7 @@ const DatabaseManagementPage = () => {
                     </Card>
                 )}
             </Box>
-        </Container>
+        </Container >
     );
 };
 

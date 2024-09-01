@@ -10,7 +10,7 @@ def fetch_and_list_doc_types(admin_db, collection_name: str) -> List[Dict[str, L
         for doc in docs_snapshot:
             try:
                 doc_data = doc.to_dict()
-                doc_type = determine_doc_type(doc_data)
+                doc_type = determine_doc_type_as_string(doc_data)  # Use the updated function
 
                 if doc_type not in doc_types:
                     doc_types[doc_type] = []
@@ -27,8 +27,24 @@ def fetch_and_list_doc_types(admin_db, collection_name: str) -> List[Dict[str, L
 
     return format_document_types(doc_types)
 
-def determine_doc_type(doc_data: Dict) -> str:
-    return '_'.join(sorted(doc_data.keys()))
+
+def determine_doc_type(doc_data: Dict, parent_key: str = '') -> List[str]:
+    keys = []
+    for k, v in doc_data.items():
+        new_key = f"{parent_key}.{k}" if parent_key else k
+        keys.append(new_key)
+        if isinstance(v, dict):
+            keys.extend(determine_doc_type(v, new_key))
+        elif isinstance(v, list):
+            for i, item in enumerate(v):
+                if isinstance(item, dict):
+                    keys.extend(determine_doc_type(item, f"{new_key}[{i}]"))
+    return keys
+
+def determine_doc_type_as_string(doc_data: Dict) -> str:
+    # Convert the list of keys to a tuple to make it hashable
+    return '_'.join(sorted(tuple(determine_doc_type(doc_data))))
+
 
 def format_document_types(doc_types: Dict[str, List[str]]) -> List[Dict[str, List[str]]]:
     formatted_types = []
