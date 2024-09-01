@@ -257,7 +257,7 @@ const DatabaseManagementPage = () => {
         <Container maxWidth="full">
             <Box mt={4}>
                 <Typography variant="h4" component="h1" gutterBottom>
-                    Database Management
+                    Database Management (Locally)
                 </Typography>
 
                 <Box mt={4}>

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
+import { Link } from 'react-router-dom';
+import HomeIcon from '@mui/icons-material/Home';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -50,6 +52,9 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                         </IconButton>
                         <IconButton onClick={handleToggleSettings} color="inherit">
                             <SettingsIcon />
+                        </IconButton>
+                        <IconButton sx={{ marginLeft: 5 }} component={Link} to="/" color="inherit">
+                            <HomeIcon />
                         </IconButton>
                     </Box>
                 </Toolbar>
