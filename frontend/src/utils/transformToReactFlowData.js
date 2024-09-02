@@ -60,12 +60,21 @@ export async function transformToReactFlowData(parsedData) {
         }
 
         // Add function call relationships (reversed)
-        for (const [callerFunctionId, calledFunctionIds] of Object.entries(fileData.functionCallRelationships || {})) {
-            if (Array.isArray(calledFunctionIds)) {
-                calledFunctionIds.forEach(calledFunctionId => {
-                    // Reversed: from called function to caller
-                    safeAddEdge(calledFunctionId, callerFunctionId, { type: 'call' }, edges, nodeSet);
-                });
+        // Add codependent relationships
+        for (const [fileName, fileData] of Object.entries(parsedData)) {
+            const functionCallRelationships = fileData.functionCallRelationships || {};
+            for (const [callerFunctionId, calledFunctionIds] of Object.entries(functionCallRelationships)) {
+                if (Array.isArray(calledFunctionIds)) {
+                    calledFunctionIds.forEach(calledFunctionId => {
+                        if (functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)) {
+                            // This is a codependent relationship
+                            safeAddEdge(callerFunctionId, calledFunctionId, { type: 'codependent' }, edges, nodeSet);
+                        } else {
+                            // Normal function call
+                            safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
+                        }
+                    });
+                }
             }
         }
     }
@@ -83,6 +92,8 @@ export async function transformToReactFlowData(parsedData) {
             }
         }
     }
+
+
 
     const graph = createElkGraph(nodes, edges);
     const layoutedGraph = await elk.layout(graph);
@@ -124,9 +135,11 @@ function safeAddEdge(sourceId, targetId, options, edges, nodeSet) {
             style: {
                 stroke: getEdgeColor(options.type),
                 strokeWidth: 2,
-                strokeDasharray: (options.type === 'call' || options.type === 'crossFileCall') ? '5,5' : 'none',
             },
-            type: 'default',
+            type: options.type === 'codependent' ? 'bidirectional' : 'custom',
+            data: { label: options.type },
+            markerEnd: options.type === 'codependent' ? 'url(#bidirectionalArrowEnd)' : undefined,
+            markerStart: options.type === 'codependent' ? 'url(#bidirectionalArrowStart)' : undefined,
         });
     } else {
         console.warn(`Skipping edge creation: node not found. Source: ${sourceId}, Target: ${targetId}`);
@@ -137,6 +150,7 @@ function getEdgeColor(type) {
     switch (type) {
         case 'call': return '#ff0000';
         case 'crossFileCall': return '#FBFF00';
+        case 'codependent': return '#00FF00';
         default: return '#FFFFFF';
     }
 }
