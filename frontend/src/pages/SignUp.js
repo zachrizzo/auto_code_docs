@@ -1,47 +1,86 @@
-// SignUp.js
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { collection, addDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/firebase';  // Assuming you set up Firestore
-import { useNavigate } from 'react-router-dom';  // Assuming you're using react-router for navigation
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { db, auth } from '../firebase/firebase';
+import { useNavigate } from 'react-router-dom';
 
 const SignUp = () => {
     const [firstName, setFirstName] = useState('');
     const [lastName, setLastName] = useState('');
     const [companyName, setCompanyName] = useState('');
     const [email, setEmail] = useState('');
+    const [confirmEmail, setConfirmEmail] = useState('');
     const [password, setPassword] = useState('');
-    const navigate = useNavigate(); // To navigate to the signup page
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [errors, setErrors] = useState({});
+    const navigate = useNavigate();
+
+    const validateInputs = () => {
+        let tempErrors = {};
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+        if (!firstName) tempErrors.firstName = "First name is required.";
+        if (!lastName) tempErrors.lastName = "Last name is required.";
+        if (!companyName) tempErrors.companyName = "Company name is required.";
+        if (!email) tempErrors.email = "Email is required.";
+        if (email !== confirmEmail) tempErrors.confirmEmail = "Emails do not match.";
+        if (!password) {
+            tempErrors.password = "Password is required.";
+        } else if (password.length < 8) {
+            tempErrors.password = "Password must be at least 8 characters.";
+        } else if (!passwordRegex.test(password)) {
+            tempErrors.password = "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+        }
+        if (password !== confirmPassword) tempErrors.confirmPassword = "Passwords do not match.";
+
+        setErrors(tempErrors);
+        return Object.keys(tempErrors).length === 0;
+    };
 
     const handleSignUp = async () => {
-        try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
+        if (validateInputs()) {
+            try {
+                console.log("Attempting to create user...");
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+                console.log("User created successfully:", user);
 
-            // Update the user profile with first and last name
-            await updateProfile(user, {
-                displayName: `${firstName} ${lastName}`,
-            });
+                console.log("Attempting to create Firestore document...");
+                await setDoc(doc(db, 'users', user.uid), {
+                    uid: user.uid,
+                    firstName,
+                    lastName,
+                    companyName,
+                    email,
+                });
 
-            // Optionally, save additional data to Firestore
-            await addDoc(collection(db, 'users'), {
-                uid: user.uid,
-                firstName,
-                lastName,
-                companyName,
-                email,
-            });
-
-            console.log('User signed up:', user);
-        } catch (error) {
-            console.error('Error signing up:', error);
+                console.log("Document created successfully, navigating to home...");
+                navigate('/'); // Redirect to the home page
+            } catch (error) {
+                console.error('Error during sign up:', error);
+                setErrors((prevErrors) => ({
+                    ...prevErrors,
+                    general: error.message,
+                }));
+            }
         }
     };
 
+
     const handleRouteLogin = () => {
         navigate('/login');
-    }
+    };
+
+    const fillTestData = () => {
+        setFirstName('zach');
+        setLastName('rizzo');
+        setCompanyName('ascd');
+        setEmail('Zachcilwa@gmail.com');
+        setConfirmEmail('Zachcilwa@gmail.com');
+        setPassword('Zach123456!');
+        setConfirmPassword('Zach123456!');
+    };
 
     return (
         <Container maxWidth="xs">
@@ -61,6 +100,8 @@ const SignUp = () => {
                         autoFocus
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
+                        error={!!errors.firstName}
+                        helperText={errors.firstName}
                     />
                     <TextField
                         margin="normal"
@@ -72,6 +113,8 @@ const SignUp = () => {
                         autoComplete="family-name"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
+                        error={!!errors.lastName}
+                        helperText={errors.lastName}
                     />
                     <TextField
                         margin="normal"
@@ -83,6 +126,8 @@ const SignUp = () => {
                         autoComplete="organization"
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
+                        error={!!errors.companyName}
+                        helperText={errors.companyName}
                     />
                     <TextField
                         margin="normal"
@@ -94,6 +139,21 @@ const SignUp = () => {
                         autoComplete="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        error={!!errors.email}
+                        helperText={errors.email}
+                    />
+                    <TextField
+                        margin="normal"
+                        required
+                        fullWidth
+                        id="confirmEmail"
+                        label="Confirm Email"
+                        name="confirmEmail"
+                        autoComplete="email"
+                        value={confirmEmail}
+                        onChange={(e) => setConfirmEmail(e.target.value)}
+                        error={!!errors.confirmEmail}
+                        helperText={errors.confirmEmail}
                     />
                     <TextField
                         margin="normal"
@@ -106,7 +166,27 @@ const SignUp = () => {
                         autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        error={!!errors.password}
+                        helperText={errors.password}
                     />
+                    <TextField
+                        margin="normal"
+                        required
+                        fullWidth
+                        name="confirmPassword"
+                        label="Confirm Password"
+                        type="password"
+                        id="confirmPassword"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        error={!!errors.confirmPassword}
+                        helperText={errors.confirmPassword}
+                    />
+                    {errors.general && (
+                        <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+                            {errors.general}
+                        </Typography>
+                    )}
                     <Button
                         type="button"
                         fullWidth
@@ -117,13 +197,24 @@ const SignUp = () => {
                         Sign Up
                     </Button>
                     <Button
-                        type='button'
+                        type="button"
                         fullWidth
-                        variant='contained'
+                        variant="contained"
                         sx={{ mt: 1, mb: 2 }}
                         onClick={handleRouteLogin}
                     >
                         Login
+                    </Button>
+                    {/* Temporary button to auto-fill the form with test data */}
+                    <Button
+                        type="button"
+                        fullWidth
+                        variant="contained"
+                        color="secondary"
+                        sx={{ mt: 1, mb: 2 }}
+                        onClick={fillTestData}
+                    >
+                        Fill Test Data
                     </Button>
                 </Box>
             </Box>
