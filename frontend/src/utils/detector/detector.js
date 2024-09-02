@@ -6,7 +6,7 @@ let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
 let globalIds = new Set();
-let globalListOfCalledFunctions = {};
+let globalFunctionNameToId = {};
 
 const languageExtensions = {
     '.js': 'javascript',
@@ -62,14 +62,15 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         rootFunctionIds: [],
         functionCallRelationships: {},
         functionNameToId: {},
-        allCalledFunctions: {}
+        allCalledFunctions: {},
+        deferredFunctionCalls: [],
     };
 
     const processedFunctions = new Set();
     const processedClasses = new Set();
 
     const parser = new Parser();
-    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language);
+    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language, globalFunctionNameToId);
 
     parser.setLanguage(parsers[language]);
 
@@ -157,6 +158,35 @@ export function resolveCrossFileDependencies() {
     for (const [sourceFileName, sourceFileResults] of Object.entries(globalResults)) {
         sourceFileResults.crossFileRelationships = {}; // Reset cross-file relationships
 
+        // Resolve deferred function calls
+        if (sourceFileResults.deferredFunctionCalls) {
+
+            sourceFileResults.deferredFunctionCalls.forEach(({ callerNodeId, calledFunctionName }) => {
+                const calledFunctionIds = globalFunctionNameToId[calledFunctionName] || [];
+                if (calledFunctionIds.length > 0) {
+                    calledFunctionIds.forEach(calledFunctionId => {
+                        // if (!sourceFileResults.functionCallRelationships[callerNodeId]) {
+                        //     sourceFileResults.functionCallRelationships[callerNodeId] = [];
+                        // }
+                        // sourceFileResults.functionCallRelationships[callerNodeId].push(calledFunctionId);
+
+                        if (!sourceFileResults.allCalledFunctions[calledFunctionId]) {
+                            sourceFileResults.allCalledFunctions[calledFunctionId] = [];
+                        }
+                        sourceFileResults.allCalledFunctions[calledFunctionId].push(callerNodeId);
+
+                        if (!globalResults[sourceFileName].crossFileRelationships[calledFunctionId]) {
+                            globalResults[sourceFileName].crossFileRelationships[calledFunctionId] = [];
+                        }
+                        globalResults[sourceFileName].crossFileRelationships[calledFunctionId].push(callerNodeId);
+                    });
+                } else {
+                    console.warn(`Unresolved function call: ${calledFunctionName} called by ${callerNodeId}`);
+                }
+            });
+            delete sourceFileResults.deferredFunctionCalls;
+        }
+
         // Iterate over all files to check for cross-file calls
         for (const [targetFileName, targetFileResults] of Object.entries(globalResults)) {
             if (sourceFileName === targetFileName) continue; // Skip same file comparisons
@@ -165,7 +195,7 @@ export function resolveCrossFileDependencies() {
             for (const [callerId, calledFunctions] of Object.entries(targetFileResults.allCalledFunctions || {})) {
                 calledFunctions.forEach(calledFunctionId => {
                     const calledFunction = allFunctions.get(calledFunctionId);
-                    if (calledFunction && calledFunction.fileName !== sourceFileName) {
+                    if (calledFunction && calledFunction.fileName === sourceFileName) {
                         // This is a cross-file call from targetFile to sourceFile
                         if (!sourceFileResults.crossFileRelationships[calledFunctionId]) {
                             sourceFileResults.crossFileRelationships[calledFunctionId] = [];
@@ -192,6 +222,7 @@ export function resolveCrossFileDependencies() {
     }
 
     console.log("Updated globalResults:", globalResults);
+    console.log('globalFunctionNameToId', globalFunctionNameToId)
 
     return globalResults;
 }

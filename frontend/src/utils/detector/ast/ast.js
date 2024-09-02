@@ -91,7 +91,7 @@ const langs = {
 }
 
 class ASTDetectionHandler {
-    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python') {
+    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python', globalFunctionNameToId) {
         this.parser = parser;
         this.results = results;
         this.processedFunctions = processedFunctions || new Set();
@@ -101,6 +101,8 @@ class ASTDetectionHandler {
         this.currentFile = currentFile;
         this.importedModules = new Set();
 
+        this.globalFunctionNameToId = globalFunctionNameToId; // Add this line
+
         this.currentClassId = null;
         this.currentFunctionId = null;
         this.parentNodeId = null;
@@ -108,7 +110,6 @@ class ASTDetectionHandler {
         this.parentStack = [];
 
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
-
 
         this.functionHandler = new FunctionHandler(this);
         this.classHandler = new ClassHandler(this);
@@ -148,7 +149,7 @@ class ASTDetectionHandler {
     }
 
     isCalledNode(nodeType) {
-        return this.calledFunction.includes(nodeType)
+        return this.calledFunction.includes(nodeType);
     }
 
     addRootLevelRelationship(nodeId) {
@@ -165,10 +166,10 @@ class ASTDetectionHandler {
         const id = this.getUniqueId(code);
 
         if (this.isFunctionNode(type)) {
-            if (!this.results.functionNameToId[name]) {
-                this.results.functionNameToId[name] = []
+            if (!this.globalFunctionNameToId[name]) {
+                this.globalFunctionNameToId[name] = [];
             }
-            this.results.functionNameToId[name].push(id)
+            this.globalFunctionNameToId[name].push(id);
         }
 
         const declaration = {
@@ -190,44 +191,38 @@ class ASTDetectionHandler {
         const calledFunctionName = this.getCalledFunctionName(node);
 
         if (calledFunctionName) {
-            // Get the ID(s) of the called function
-            const calledFunctionIds = this.results.functionNameToId[calledFunctionName] || [];
+            // Get the ID(s) of the called function from global declarations
+            const calledFunctionIds = this.globalFunctionNameToId[calledFunctionName] || [];
 
-            // If no ID is found, generate a temporary one for external functions
-            // if (calledFunctionIds.length === 0) {
-            //     const tempId = this.getUniqueId(`external_${calledFunctionName}`);
-            //     calledFunctionIds.push(tempId);
-
-            //     // Record this external function in allDeclarations
-            //     this.results.allDeclarations[tempId] = {
-            //         id: tempId,
-            //         name: calledFunctionName,
-            //         type: 'external_function',
-            //         path: 'unknown',
-            //         code: '',
-            //         analysisId: this.currentAnalysisId,
-            //         file: 'unknown'
-            //     };
-            // }
-
-            // Record in functionCallRelationships
-            if (!this.results.functionCallRelationships[callerNodeId]) {
-                this.results.functionCallRelationships[callerNodeId] = new Set();
-            }
-            calledFunctionIds.forEach(id => {
-                this.results.functionCallRelationships[callerNodeId].add(id);
-            });
-
-            // Record in allCalledFunctions
-            calledFunctionIds.forEach(id => {
-                if (!this.results.allCalledFunctions[id]) {
-                    this.results.allCalledFunctions[id] = new Set();
+            // If the declaration isn't found, defer the resolution
+            if (calledFunctionIds.length === 0) {
+                if (!this.results.deferredFunctionCalls) {
+                    this.results.deferredFunctionCalls = [];
                 }
-                this.results.allCalledFunctions[id].add(callerNodeId);
-            });
+                this.results.deferredFunctionCalls.push({ callerNodeId, calledFunctionName });
+            } else {
+                // Record the relationship immediately if declarations are known
+                this.recordFunctionCall(callerNodeId, calledFunctionIds);
+            }
         }
     }
 
+    recordFunctionCall(callerNodeId, calledFunctionIds) {
+        if (!this.results.functionCallRelationships[callerNodeId]) {
+            this.results.functionCallRelationships[callerNodeId] = new Set();
+        }
+        calledFunctionIds.forEach(id => {
+            this.results.functionCallRelationships[callerNodeId].add(id);
+        });
+
+        // Record in allCalledFunctions
+        calledFunctionIds.forEach(id => {
+            if (!this.results.allCalledFunctions[id]) {
+                this.results.allCalledFunctions[id] = new Set();
+            }
+            this.results.allCalledFunctions[id].add(callerNodeId);
+        });
+    }
 
     getChildNodes = (cursor, parentPath = '', parentId = null, isRootLevel = true) => {
         if (cursor.gotoFirstChild()) {
