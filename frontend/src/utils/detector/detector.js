@@ -6,10 +6,11 @@ let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
 let globalIds = new Set();
+let globalListOfCalledFunctions = {};
 
 const languageExtensions = {
     '.js': 'javascript',
-    'jsx': 'javascript',
+    '.jsx': 'javascript',
     '.py': 'python',
     // Add more extensions and languages here if needed
 };
@@ -60,7 +61,8 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         analysisId: currentAnalysisId,
         rootFunctionIds: [],
         functionCallRelationships: {},
-        functionNameToId: {}
+        functionNameToId: {},
+        allCalledFunctions: {}
     };
 
     const processedFunctions = new Set();
@@ -132,7 +134,7 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
 export function detectLanguageFromExtension(extension) {
     const languageMap = {
         '.js': 'javascript',
-        'jsx': 'javascript',
+        '.jsx': 'javascript',
         '.py': 'python',
         // Add more extensions and languages here if needed
     };
@@ -144,66 +146,46 @@ export function resolveCrossFileDependencies() {
     // Create a global map of all functions
     const allFunctions = new Map();
     for (const [fileName, fileResults] of Object.entries(globalResults)) {
-        fileResults.functions?.forEach(func => {
-            const declaration = fileResults.allDeclarations[func.id];
-            if (declaration) {
-                allFunctions.set(declaration.name, { id: declaration.id, fileName });
-            }
-        });
-        // Include class methods as well
-        fileResults.classes?.forEach(cls => {
-            const classDeclaration = fileResults.allDeclarations[cls.id];
-            if (classDeclaration) {
-                Object.values(fileResults.allDeclarations)
-                    .filter(decl => decl.path && decl.path.startsWith(`${classDeclaration.path}-`) && decl.type === 'function')
-                    .forEach(method => {
-                        allFunctions.set(method.name, { id: method.id, fileName });
-                    });
+        fileResults.allDeclarations && Object.values(fileResults.allDeclarations).forEach(declaration => {
+            if (declaration.type === 'function' || declaration.type === 'method') {
+                allFunctions.set(declaration.id, { name: declaration.name, fileName });
             }
         });
     }
 
     // Resolve cross-file relationships
-    for (const [fileName, fileResults] of Object.entries(globalResults)) {
-        fileResults.crossFileRelationships = {};
+    for (const [sourceFileName, sourceFileResults] of Object.entries(globalResults)) {
+        sourceFileResults.crossFileRelationships = {}; // Reset cross-file relationships
 
-        // Iterate through all function calls in this file
-        for (const [callerId, calledFunctions] of Object.entries(fileResults.functionCallRelationships || {})) {
-            for (const calledFunctionName of calledFunctions) {
-                const calledFunctionInfo = allFunctions.get(calledFunctionName);
-                if (calledFunctionInfo) {
-                    // Update functionCallRelationships with function IDs
-                    if (!fileResults.functionCallRelationships[callerId]) {
-                        fileResults.functionCallRelationships[callerId] = [];
-                    }
-                    if (!fileResults.functionCallRelationships[callerId].includes(calledFunctionInfo.id)) {
-                        fileResults.functionCallRelationships[callerId].push(calledFunctionInfo.id);
-                    }
+        // Iterate over all files to check for cross-file calls
+        for (const [targetFileName, targetFileResults] of Object.entries(globalResults)) {
+            if (sourceFileName === targetFileName) continue; // Skip same file comparisons
 
-                    // Record cross-file calls
-                    if (calledFunctionInfo.fileName !== fileName) {
-                        if (!fileResults.crossFileRelationships[callerId]) {
-                            fileResults.crossFileRelationships[callerId] = [];
+            // Check all function calls in the target file
+            for (const [callerId, calledFunctions] of Object.entries(targetFileResults.allCalledFunctions || {})) {
+                calledFunctions.forEach(calledFunctionId => {
+                    const calledFunction = allFunctions.get(calledFunctionId);
+                    if (calledFunction && calledFunction.fileName !== sourceFileName) {
+                        // This is a cross-file call from targetFile to sourceFile
+                        if (!sourceFileResults.crossFileRelationships[calledFunctionId]) {
+                            sourceFileResults.crossFileRelationships[calledFunctionId] = [];
                         }
-                        if (!fileResults.crossFileRelationships[callerId].includes(calledFunctionInfo.id)) {
-                            fileResults.crossFileRelationships[callerId].push(calledFunctionInfo.id);
-                        }
+                        sourceFileResults.crossFileRelationships[calledFunctionId].push(callerId);
                     }
-                }
+                });
             }
         }
 
-        // Clean up any null keys in directRelationships
-        if (fileResults.directRelationships && 'null' in fileResults.directRelationships) {
-            console.warn(`Found 'null' key in directRelationships for file ${fileName}`);
-            delete fileResults.directRelationships['null'];
+        // Clean up and ensure proper data structures
+        if (sourceFileResults.directRelationships && 'null' in sourceFileResults.directRelationships) {
+            console.warn(`Found 'null' key in directRelationships for file ${sourceFileName}`);
+            delete sourceFileResults.directRelationships['null'];
         }
 
-        // Ensure functionCallRelationships are arrays
-        if (fileResults.functionCallRelationships) {
-            for (const [key, value] of Object.entries(fileResults.functionCallRelationships)) {
+        if (sourceFileResults.functionCallRelationships) {
+            for (const [key, value] of Object.entries(sourceFileResults.functionCallRelationships)) {
                 if (!Array.isArray(value)) {
-                    fileResults.functionCallRelationships[key] = Array.from(value);
+                    sourceFileResults.functionCallRelationships[key] = Array.from(value);
                 }
             }
         }

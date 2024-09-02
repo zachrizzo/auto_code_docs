@@ -127,6 +127,7 @@ class ASTDetectionHandler {
         this.results.rootFunctionIds = this.results.rootFunctionIds || [];
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
         this.results.allDeclarations = this.results.allDeclarations || {};
+        this.results.allCalledFunctions = this.results.allCalledFunctions || {};
     }
 
     isInWatchedDir(filePath) {
@@ -189,16 +190,40 @@ class ASTDetectionHandler {
         const calledFunctionName = this.getCalledFunctionName(node);
 
         if (calledFunctionName) {
+            // Get the ID(s) of the called function
+            const calledFunctionIds = this.results.functionNameToId[calledFunctionName] || [];
+
+            // If no ID is found, generate a temporary one for external functions
+            // if (calledFunctionIds.length === 0) {
+            //     const tempId = this.getUniqueId(`external_${calledFunctionName}`);
+            //     calledFunctionIds.push(tempId);
+
+            //     // Record this external function in allDeclarations
+            //     this.results.allDeclarations[tempId] = {
+            //         id: tempId,
+            //         name: calledFunctionName,
+            //         type: 'external_function',
+            //         path: 'unknown',
+            //         code: '',
+            //         analysisId: this.currentAnalysisId,
+            //         file: 'unknown'
+            //     };
+            // }
+
+            // Record in functionCallRelationships
             if (!this.results.functionCallRelationships[callerNodeId]) {
                 this.results.functionCallRelationships[callerNodeId] = new Set();
             }
-
-            // Use functionNameToId to get the ID(s) of the called function
-            const calledFunctionIds = this.results.functionNameToId[calledFunctionName] || [];
-
-            // Add all possible IDs for the called function
             calledFunctionIds.forEach(id => {
                 this.results.functionCallRelationships[callerNodeId].add(id);
+            });
+
+            // Record in allCalledFunctions
+            calledFunctionIds.forEach(id => {
+                if (!this.results.allCalledFunctions[id]) {
+                    this.results.allCalledFunctions[id] = new Set();
+                }
+                this.results.allCalledFunctions[id].add(callerNodeId);
             });
         }
     }
@@ -247,7 +272,6 @@ class ASTDetectionHandler {
 
                 this.parentStack.pop();
             } else if (isCalledNode) {
-                this.results.allCalledFunctions
                 this.addFunctionCallRelationship(node);
 
                 if (cursor.gotoFirstChild()) {
@@ -302,6 +326,11 @@ class ASTDetectionHandler {
         // Convert Sets to Arrays in functionCallRelationships
         for (const [callerId, calledFunctionIds] of Object.entries(this.results.functionCallRelationships)) {
             this.results.functionCallRelationships[callerId] = Array.from(calledFunctionIds);
+        }
+
+        // Convert Sets to Arrays in allCalledFunctions
+        for (const [functionId, callerIds] of Object.entries(this.results.allCalledFunctions)) {
+            this.results.allCalledFunctions[functionId] = Array.from(callerIds);
         }
     }
 }

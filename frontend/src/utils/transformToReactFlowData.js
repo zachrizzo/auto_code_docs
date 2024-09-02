@@ -30,12 +30,14 @@ export async function transformToReactFlowData(parsedData) {
         return parts[parts.length - 1];
     };
 
-    // Create nodes
+    // Create nodes only from allDeclarations and file name
     for (const [fileName, fileData] of Object.entries(parsedData)) {
+        // Create a node for the file
         const fileNodeId = `file-${getFileName(fileName)}`;
         nodes.push(createNode(fileNodeId, getFileName(fileName)));
         nodeSet.add(fileNodeId);
 
+        // Create nodes for all declarations in the file
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
             const nodeLabel = declaration.name + (id.toLowerCase().includes('copy') ? ' (Duplicate)' : '');
@@ -44,7 +46,7 @@ export async function transformToReactFlowData(parsedData) {
         }
     }
 
-    // Create edges
+    // Create edges (keep this part as it was)
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         const fileNodeId = `file-${getFileName(fileName)}`;
 
@@ -60,22 +62,19 @@ export async function transformToReactFlowData(parsedData) {
             }
         }
 
-        // Add function call relationships (reversed)
-        // Add codependent relationships
-        for (const [fileName, fileData] of Object.entries(parsedData)) {
-            const functionCallRelationships = fileData.functionCallRelationships || {};
-            for (const [callerFunctionId, calledFunctionIds] of Object.entries(functionCallRelationships)) {
-                if (Array.isArray(calledFunctionIds)) {
-                    calledFunctionIds.forEach(calledFunctionId => {
-                        if (functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)) {
-                            // This is a codependent relationship
-                            safeAddEdge(callerFunctionId, calledFunctionId, { type: 'codependent' }, edges, nodeSet);
-                        } else {
-                            // Normal function call
-                            safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
-                        }
-                    });
-                }
+        // Add function call relationships and codependent relationships
+        const functionCallRelationships = fileData.functionCallRelationships || {};
+        for (const [callerFunctionId, calledFunctionIds] of Object.entries(functionCallRelationships)) {
+            if (Array.isArray(calledFunctionIds)) {
+                calledFunctionIds.forEach(calledFunctionId => {
+                    if (functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)) {
+                        // This is a codependent relationship
+                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'codependent' }, edges, nodeSet);
+                    } else {
+                        // Normal function call
+                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
+                    }
+                });
             }
         }
     }
@@ -83,18 +82,13 @@ export async function transformToReactFlowData(parsedData) {
     // Add cross-file relationships
     for (const [fileName, fileData] of Object.entries(parsedData)) {
         for (const [sourceId, relationships] of Object.entries(fileData.crossFileRelationships || {})) {
-            for (const [targetFileName, targetIds] of Object.entries(relationships)) {
-                if (Array.isArray(targetIds)) {
-                    targetIds.forEach(targetId => {
-                        // Reversed: from target to source
-                        safeAddEdge(targetId, sourceId, { type: 'crossFileCall' }, edges, nodeSet);
-                    });
-                }
+            if (Array.isArray(relationships)) {
+                relationships.forEach(targetId => {
+                    safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }, edges, nodeSet);
+                });
             }
         }
     }
-
-
 
     const graph = createElkGraph(nodes, edges);
     const layoutedGraph = await elk.layout(graph);

@@ -37,7 +37,7 @@ const Analyzer = () => {
             aggregatedResults[filePath] = analysisResults;
         };
 
-        const walkDirectory = (dir) => {
+        const walkDirectory = async (dir) => {
             const files = fs.readdirSync(dir);
 
             files.forEach((file) => {
@@ -46,7 +46,7 @@ const Analyzer = () => {
 
                 if (stat.isDirectory()) {
                     walkDirectory(filePath);
-                } else if (file.endsWith('.js') || file.endsWith('.py')) {
+                } else if (file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) {
                     analyzeFile(filePath);
                 }
             });
