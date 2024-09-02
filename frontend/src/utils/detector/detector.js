@@ -9,6 +9,7 @@ let globalIds = new Set();
 
 const languageExtensions = {
     '.js': 'javascript',
+    'jsx': 'javascript',
     '.py': 'python',
     // Add more extensions and languages here if needed
 };
@@ -131,6 +132,7 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
 export function detectLanguageFromExtension(extension) {
     const languageMap = {
         '.js': 'javascript',
+        'jsx': 'javascript',
         '.py': 'python',
         // Add more extensions and languages here if needed
     };
@@ -165,12 +167,10 @@ export function resolveCrossFileDependencies() {
     for (const [fileName, fileResults] of Object.entries(globalResults)) {
         fileResults.crossFileRelationships = {};
 
-        // Preserve existing functionCallRelationships
-        const existingFunctionCallRelationships = fileResults.functionCallRelationships || {};
-
-        for (const [callerId, calledFunctions] of Object.entries(existingFunctionCallRelationships)) {
-            for (const calledFunction of calledFunctions) {
-                const calledFunctionInfo = allFunctions.get(calledFunction);
+        // Iterate through all function calls in this file
+        for (const [callerId, calledFunctions] of Object.entries(fileResults.functionCallRelationships || {})) {
+            for (const calledFunctionName of calledFunctions) {
+                const calledFunctionInfo = allFunctions.get(calledFunctionName);
                 if (calledFunctionInfo) {
                     // Update functionCallRelationships with function IDs
                     if (!fileResults.functionCallRelationships[callerId]) {

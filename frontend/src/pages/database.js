@@ -452,7 +452,7 @@ const DatabaseManagementPage = () => {
                     </Card>
                 )}
             </Box>
-        </Container >
+        </Container>
     );
 };
 
