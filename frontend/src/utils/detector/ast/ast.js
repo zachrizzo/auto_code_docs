@@ -247,6 +247,7 @@ class ASTDetectionHandler {
 
                 this.parentStack.pop();
             } else if (isCalledNode) {
+                this.results.allCalledFunctions
                 this.addFunctionCallRelationship(node);
 
                 if (cursor.gotoFirstChild()) {
@@ -264,15 +265,32 @@ class ASTDetectionHandler {
     }
 
     getCalledFunctionName(node) {
-        if (node.type === 'call_expression') {
-            const functionNode = node.child(0);
+        if (this.isCalledNode(node.type)) {
+            let functionNode = node.child(0);
+
+            // Handle different node structures
             if (functionNode) {
                 if (functionNode.type === 'identifier') {
                     return functionNode.text;
-                } else if (functionNode.type === 'member_expression') {
-                    const objectName = functionNode.child(0).text;
-                    const propertyName = functionNode.child(1).text;
-                    return `${objectName}.${propertyName}`;
+                } else if (['member_expression', 'attribute', 'field_expression'].includes(functionNode.type)) {
+                    // Handle object method calls (e.g., object.method())
+                    let objectName = functionNode.child(0)?.text;
+                    let propertyName = functionNode.child(1)?.text;
+                    if (objectName && propertyName) {
+                        return `${objectName}.${propertyName}`;
+                    }
+                } else if (functionNode.type === 'function') {
+                    // Handle anonymous function calls
+                    return 'anonymous';
+                }
+            }
+
+            // If we couldn't identify the function name from the first child,
+            // try to find an identifier among the node's children
+            for (let i = 0; i < node.namedChildCount; i++) {
+                let child = node.namedChild(i);
+                if (child.type === 'identifier') {
+                    return child.text;
                 }
             }
         }
