@@ -59,17 +59,12 @@ export async function transformToReactFlowData(parsedData) {
             }
         }
 
-        // Add function call relationships
-        for (const [callerFunctionId, calledFunctions] of Object.entries(fileData.functionCallRelationships || {})) {
-            if (Array.isArray(calledFunctions)) {
-                calledFunctions.forEach(calledFunction => {
-                    const calledFunctionId = fileData.functionNameToId[calledFunction]?.[0];
-                    if (calledFunctionId) {
-                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
-                    } else {
-                        // This might be a cross-file call, but we can't determine it from the current structure
-                        console.warn(`Function call target not found in the same file: ${calledFunction}`);
-                    }
+        // Add function call relationships (reversed)
+        for (const [callerFunctionId, calledFunctionIds] of Object.entries(fileData.functionCallRelationships || {})) {
+            if (Array.isArray(calledFunctionIds)) {
+                calledFunctionIds.forEach(calledFunctionId => {
+                    // Reversed: from called function to caller
+                    safeAddEdge(calledFunctionId, callerFunctionId, { type: 'call' }, edges, nodeSet);
                 });
             }
         }
@@ -81,7 +76,8 @@ export async function transformToReactFlowData(parsedData) {
             for (const [targetFileName, targetIds] of Object.entries(relationships)) {
                 if (Array.isArray(targetIds)) {
                     targetIds.forEach(targetId => {
-                        safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }, edges, nodeSet);
+                        // Reversed: from target to source
+                        safeAddEdge(targetId, sourceId, { type: 'crossFileCall' }, edges, nodeSet);
                     });
                 }
             }

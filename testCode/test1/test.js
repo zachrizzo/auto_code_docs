@@ -21,13 +21,20 @@ export function divide(a, b) {
     return a / b;
 }
 
+const addingDawg = (a, b) => {
+    return add(a, b);
+}
+
 
 export class Calculator {
     constructor() {
         this.history = [];
     }
 
+
+
     calculate(operation, a, b) {
+        addingDawg(a, b)
         let result;
         switch (operation) {
             case 'add':

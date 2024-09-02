@@ -87,8 +87,11 @@ def outer_function(x):
 
     return inner_function
 
+
+
 # Decorator function example
 def decorator_function(func):
+    outer_function()
     """A decorator function."""
     def wrapper(*args, **kwargs):
         print(f"Calling {func.__name__} with {args} and {kwargs}")
