@@ -5,18 +5,16 @@ class FunctionHandler {
 
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
-
-        if (functionName && this.shouldProcessFunction(functionName)) {
+        //TODO handle anonymous functions and name them later
+        if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
             const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
 
             if (id) {
-                // ParentId is dynamically fetched via ASTDetectionHandler method
                 if (parentId) {
                     this.addFunctionRelationship(id, parentId);
                 }
 
-                // this.traverseFunctionBody(node, path, id);
                 this.astAnalyzer.processedFunctions.add(functionName);
 
                 return id;
@@ -28,7 +26,6 @@ class FunctionHandler {
     extractFunctionName(node) {
         let functionName = node.childForFieldName('name')?.text;
 
-        // Check if this function is part of an object literal
         if (!functionName && node.parent && node.parent.type === 'pair') {
             functionName = node.parent.childForFieldName('key')?.text;
         }
@@ -75,11 +72,8 @@ class FunctionHandler {
     }
 
     addFunctionRelationship(id, parentId) {
-        if (parentId) {
-            // If there is a parent function, establish a child-parent relationship
-            if (this.astAnalyzer.results.allDeclarations[parentId]) { // Ensure parentId exists in declarations
-                this.addDirectRelationship(parentId, id);
-            }
+        if (parentId && this.astAnalyzer.results.allDeclarations[parentId]) {
+            this.addDirectRelationship(parentId, id);
         }
     }
 
@@ -96,8 +90,7 @@ class FunctionHandler {
                 do {
                     const childNode = cursor.currentNode;
                     if (this.astAnalyzer.isFunctionNode(childNode.type)) {
-                        // Handle nested functions and establish parent-child relationship
-                        this.handleNode(childNode, path, functionId); // Correctly pass the current functionId as parentId
+                        this.handleNode(childNode, path, functionId);
                     }
                 } while (cursor.gotoNextSibling());
             }

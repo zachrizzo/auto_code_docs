@@ -5,6 +5,7 @@ let parsers = {};
 let globalResults = {}; // To store parsed results for all files
 let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
 let currentAnalysisId = 0;
+let globalIds = new Set();
 
 const languageExtensions = {
     '.js': 'javascript',
@@ -24,6 +25,17 @@ export async function initializeParser() {
 
     parsers.javascript = JavaScript;
     parsers.python = Python;
+}
+
+function resolveIdConflict(id) {
+    let newId = id;
+    let counter = 1;
+    while (globalIds.has(newId)) {
+        newId = `${id}_copy_${counter}`;
+        counter++;
+    }
+    globalIds.add(newId);
+    return newId;
 }
 
 export function detectLanguageFromFileName(fileName) {
@@ -104,6 +116,14 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
             delete globalDeclarations[name];
         }
     }
+
+    // After generating IDs for functions and classes:
+    results.functions?.forEach(func => {
+        func.id = resolveIdConflict(func.id);
+    });
+    results.classes?.forEach(cls => {
+        cls.id = resolveIdConflict(cls.id);
+    });
 
     return results;
 }

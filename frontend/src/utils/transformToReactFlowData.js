@@ -38,7 +38,8 @@ export async function transformToReactFlowData(parsedData) {
 
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
-            nodes.push(createNode(id, declaration.name));
+            const nodeLabel = declaration.name + (id.toLowerCase().includes('copy') ? ' (Duplicate)' : '');
+            nodes.push(createNode(id, nodeLabel));
             nodeSet.add(id);
         }
     }
@@ -109,6 +110,7 @@ export async function transformToReactFlowData(parsedData) {
 }
 
 function createNode(id, label) {
+    const isDuplicate = id.toLowerCase().includes('copy');
     return {
         id,
         data: {
@@ -118,6 +120,10 @@ function createNode(id, label) {
         },
         type: 'elk',
         position: { x: 0, y: 0 },
+        style: isDuplicate ? {
+            backgroundColor: 'red',
+            color: 'white'
+        } : {},
     };
 }
 
