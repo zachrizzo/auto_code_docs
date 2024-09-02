@@ -8,7 +8,9 @@
     "build": "webpack --mode production",
     "dev": "webpack serve --mode development",
     "postinstall": "electron-rebuild -f -w tree-sitter tree-sitter-javascript",
-    "backend": "cd ../backend && python3 server.py"
+    "backend": "cd ../backend && python3 server.py",
+    "emulators:export:to-seed": "firebase emulators:export --config src/firebase/firebase.json data/seed --project slp-toolkit-v2-dev",
+    "emulators:start:from-seed": "firebase emulators:start --config src/firebase/firebase.json --only auth,firestore,functions,extensions,storage,pubsub --import=./data/seed --export-on-exit=.data --project auto-code-documentation --inspect-functions"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase/firebase';
+import { db, auth, functions } from '../firebase/firebase';
 import { useNavigate } from 'react-router-dom';
+import { httpsCallable } from "firebase/functions";
+
 
 const SignUp = () => {
     const [firstName, setFirstName] = useState('');
@@ -41,24 +43,22 @@ const SignUp = () => {
     const handleSignUp = async () => {
         if (validateInputs()) {
             try {
-                console.log("Attempting to create user...");
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                const user = userCredential.user;
-                console.log("User created successfully:", user);
+                const createUser = httpsCallable(functions, 'auth-createUser');
 
-                console.log("Attempting to create Firestore document...");
-                await setDoc(doc(db, 'users', user.uid), {
-                    uid: user.uid,
+                const result = await createUser({
+                    email,
+                    password,
                     firstName,
                     lastName,
                     companyName,
-                    email,
                 });
 
-                console.log("Document created successfully, navigating to home...");
+
+
+                console.log('User created with UID:', result.data.uid);
                 navigate('/'); // Redirect to the home page
             } catch (error) {
-                console.error('Error during sign up:', error);
+                console.error('Error creating user:', error);
                 setErrors((prevErrors) => ({
                     ...prevErrors,
                     general: error.message,
@@ -66,6 +66,7 @@ const SignUp = () => {
             }
         }
     };
+
 
 
     const handleRouteLogin = () => {
