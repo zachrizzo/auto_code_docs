@@ -6,6 +6,9 @@ import Analyzer from './pages/Analyzer';
 import { initializeParser } from './utils/detector/detector';
 import Header from './components/layout/Header'; // Importing the new Header component
 import DatabaseManagementPage from './pages/database';
+import SignUp from './pages/signUp';
+import { auth } from './firebase/firebase';
+import Login from './pages/login';
 
 
 const lightThemeColors = {
@@ -304,12 +307,16 @@ function App() {
             <CssBaseline />
             <GlobalStyles styles={{ body: { backgroundColor: darkMode ? darkThemeColors.background : lightThemeColors.background } }} />
             <Router>
-                <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+                {auth.currentUser && (
+                    <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+                )}
                 <Container>
                     <Routes>
-                        <Route path="/" element={<Home />} />
+                        <Route path="/" element={auth.currentUser ? <Home /> : <Login />} />
                         <Route path="/analyze" element={<Analyzer />} />
                         <Route path="/database" element={<DatabaseManagementPage />} />
+                        <Route path="/login" element={<Login />} />
+                        <Route path="/signup" element={<SignUp />} />
                     </Routes>
                 </Container>
             </Router>

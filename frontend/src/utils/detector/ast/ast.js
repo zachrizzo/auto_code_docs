@@ -40,6 +40,8 @@ const langs = {
         ],
         call: [
             'call_expression',
+            'jsx_element',
+            'jsx_self_closing_element'
         ],
         other: [
             'call_expression',       // Represents a function call

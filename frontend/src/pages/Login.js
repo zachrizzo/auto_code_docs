@@ -1,12 +1,13 @@
-// Login.js
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
-import { auth } from './firebase';
+import { auth } from '../firebase/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';  // Assuming you're using react-router for navigation
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const navigate = useNavigate(); // To navigate to the signup page
 
     const handleLogin = async () => {
         try {
@@ -15,6 +16,10 @@ const Login = () => {
         } catch (error) {
             console.error('Error logging in:', error);
         }
+    };
+
+    const handleSignUpRedirect = () => {
+        navigate('/signup'); // Redirect to the signup page
     };
 
     return (
@@ -56,6 +61,15 @@ const Login = () => {
                         onClick={handleLogin}
                     >
                         Log In
+                    </Button>
+                    <Button
+                        type="button"
+                        fullWidth
+                        variant="outlined"
+                        sx={{ mt: 1 }}
+                        onClick={handleSignUpRedirect}
+                    >
+                        Sign Up
                     </Button>
                 </Box>
             </Box>

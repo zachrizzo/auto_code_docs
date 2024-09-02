@@ -137,7 +137,6 @@ export function detectLanguageFromExtension(extension) {
         '.js': 'javascript',
         '.jsx': 'javascript',
         '.py': 'python',
-        // Add more extensions and languages here if needed
     };
 
     return languageMap[extension] || null;
@@ -165,10 +164,6 @@ export function resolveCrossFileDependencies() {
                 const calledFunctionIds = globalFunctionNameToId[calledFunctionName] || [];
                 if (calledFunctionIds.length > 0) {
                     calledFunctionIds.forEach(calledFunctionId => {
-                        // if (!sourceFileResults.functionCallRelationships[callerNodeId]) {
-                        //     sourceFileResults.functionCallRelationships[callerNodeId] = [];
-                        // }
-                        // sourceFileResults.functionCallRelationships[callerNodeId].push(calledFunctionId);
 
                         if (!sourceFileResults.allCalledFunctions[calledFunctionId]) {
                             sourceFileResults.allCalledFunctions[calledFunctionId] = [];
@@ -187,38 +182,6 @@ export function resolveCrossFileDependencies() {
             delete sourceFileResults.deferredFunctionCalls;
         }
 
-        // Iterate over all files to check for cross-file calls
-        for (const [targetFileName, targetFileResults] of Object.entries(globalResults)) {
-            if (sourceFileName === targetFileName) continue; // Skip same file comparisons
-
-            // Check all function calls in the target file
-            for (const [callerId, calledFunctions] of Object.entries(targetFileResults.allCalledFunctions || {})) {
-                calledFunctions.forEach(calledFunctionId => {
-                    const calledFunction = allFunctions.get(calledFunctionId);
-                    if (calledFunction && calledFunction.fileName === sourceFileName) {
-                        // This is a cross-file call from targetFile to sourceFile
-                        if (!sourceFileResults.crossFileRelationships[calledFunctionId]) {
-                            sourceFileResults.crossFileRelationships[calledFunctionId] = [];
-                        }
-                        sourceFileResults.crossFileRelationships[calledFunctionId].push(callerId);
-                    }
-                });
-            }
-        }
-
-        // Clean up and ensure proper data structures
-        if (sourceFileResults.directRelationships && 'null' in sourceFileResults.directRelationships) {
-            console.warn(`Found 'null' key in directRelationships for file ${sourceFileName}`);
-            delete sourceFileResults.directRelationships['null'];
-        }
-
-        if (sourceFileResults.functionCallRelationships) {
-            for (const [key, value] of Object.entries(sourceFileResults.functionCallRelationships)) {
-                if (!Array.isArray(value)) {
-                    sourceFileResults.functionCallRelationships[key] = Array.from(value);
-                }
-            }
-        }
     }
 
     console.log("Updated globalResults:", globalResults);

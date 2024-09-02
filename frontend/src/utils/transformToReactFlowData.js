@@ -143,7 +143,7 @@ function safeAddEdge(sourceId, targetId, options, edges, nodeSet) {
 
 function getEdgeColor(type) {
     switch (type) {
-        case 'call': return '#000DFF';
+        case 'call': return '#FFFF00';
         case 'crossFileCall': return '#ff0000';
         case 'codependent': return '#00FF00';
         default: return '#FFFFFF';

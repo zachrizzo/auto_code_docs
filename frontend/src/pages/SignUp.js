@@ -1,10 +1,10 @@
 // SignUp.js
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
-import { auth } from './firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { collection, addDoc } from 'firebase/firestore';
-import { db } from './firebase';  // Assuming you set up Firestore
+import { db, auth } from '../firebase/firebase';  // Assuming you set up Firestore
+import { useNavigate } from 'react-router-dom';  // Assuming you're using react-router for navigation
 
 const SignUp = () => {
     const [firstName, setFirstName] = useState('');
@@ -12,6 +12,7 @@ const SignUp = () => {
     const [companyName, setCompanyName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const navigate = useNavigate(); // To navigate to the signup page
 
     const handleSignUp = async () => {
         try {
@@ -37,6 +38,10 @@ const SignUp = () => {
             console.error('Error signing up:', error);
         }
     };
+
+    const handleRouteLogin = () => {
+        navigate('/login');
+    }
 
     return (
         <Container maxWidth="xs">
@@ -110,6 +115,15 @@ const SignUp = () => {
                         onClick={handleSignUp}
                     >
                         Sign Up
+                    </Button>
+                    <Button
+                        type='button'
+                        fullWidth
+                        variant='contained'
+                        sx={{ mt: 1, mb: 2 }}
+                        onClick={handleRouteLogin}
+                    >
+                        Login
                     </Button>
                 </Box>
             </Box>
