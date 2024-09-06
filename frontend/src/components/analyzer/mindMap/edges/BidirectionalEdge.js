@@ -1,7 +1,8 @@
+// BidirectionalEdge.js
 import React from 'react';
 import { getBezierPath, EdgeText } from 'reactflow';
 
-export default function BidirectionalEdge({
+function BidirectionalEdge({
     id,
     sourceX,
     sourceY,
@@ -40,3 +41,5 @@ export default function BidirectionalEdge({
         </>
     );
 }
+
+export default BidirectionalEdge;

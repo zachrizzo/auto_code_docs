@@ -46,90 +46,96 @@ export function detectLanguageFromFileName(fileName) {
 }
 
 export async function detectClassesAndFunctions(code, filePath, fileExtension, watchedDir) {
-    const language = detectLanguageFromExtension(fileExtension);
+    try {
+        const language = detectLanguageFromExtension(fileExtension);
 
-    if (!language || !parsers[language]) {
-        await initializeParser();
-    }
+        if (!language || !parsers[language]) {
+            await initializeParser();
+        }
 
-    const results = {
-        filePath,
-        directRelationships: {},
-        crossFileRelationships: {},
-        allDeclarations: {},
-        recursiveRelationships: [],
-        analysisId: currentAnalysisId,
-        rootFunctionIds: [],
-        functionCallRelationships: {},
-        functionNameToId: {},
-        allCalledFunctions: {},
-        deferredFunctionCalls: [],
-    };
+        const results = {
+            filePath,
+            directRelationships: {},
+            crossFileRelationships: {},
+            allDeclarations: {},
+            recursiveRelationships: [],
+            analysisId: currentAnalysisId,
+            rootFunctionIds: [],
+            functionCallRelationships: {},
+            functionNameToId: {},
+            allCalledFunctions: {},
+            deferredFunctionCalls: [],
+        };
 
-    const processedFunctions = new Set();
-    const processedClasses = new Set();
+        const processedFunctions = new Set();
+        const processedClasses = new Set();
 
-    const parser = new Parser();
-    const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language, globalFunctionNameToId);
+        const parser = new Parser();
+        const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language, globalFunctionNameToId);
 
-    parser.setLanguage(parsers[language]);
+        parser.setLanguage(parsers[language]);
 
-    const tree = parser.parse(code);
-    const cursor = tree.walk();
+        const tree = parser.parse(code);
+        const cursor = tree.walk();
 
-    // Single pass: Detect functions, classes, and function calls
-    ASTDetection.traverseAndDetect(cursor);
+        // Single pass: Detect functions, classes, and function calls
+        ASTDetection.traverseAndDetect(cursor);
 
-    currentAnalysisId++;
+        currentAnalysisId++;
 
-    ASTDetection.finalizeRelationships();
-    currentAnalysisId++;
+        ASTDetection.finalizeRelationships();
+        currentAnalysisId++;
 
-    ASTDetection.finalizeRelationships();
+        ASTDetection.finalizeRelationships();
 
-    // Update globalResults
-    if (!globalResults[filePath]) {
-        globalResults[filePath] = {};
-    }
+        // Update globalResults
+        if (!globalResults[filePath]) {
+            globalResults[filePath] = {};
+        }
 
-    // Remove old declarations and relationships
-    for (const key in globalResults[filePath]) {
-        if (Array.isArray(globalResults[filePath][key])) {
-            globalResults[filePath][key] = globalResults[filePath][key].filter(item => item.analysisId === currentAnalysisId);
-        } else if (typeof globalResults[filePath][key] === 'object') {
-            for (const subKey in globalResults[filePath][key]) {
-                if (globalResults[filePath][key][subKey].analysisId !== currentAnalysisId) {
-                    delete globalResults[filePath][key][subKey];
+        // Remove old declarations and relationships
+        for (const key in globalResults[filePath]) {
+            if (Array.isArray(globalResults[filePath][key])) {
+                globalResults[filePath][key] = globalResults[filePath][key].filter(item => item.analysisId === currentAnalysisId);
+            } else if (typeof globalResults[filePath][key] === 'object') {
+                for (const subKey in globalResults[filePath][key]) {
+                    if (globalResults[filePath][key][subKey].analysisId !== currentAnalysisId) {
+                        delete globalResults[filePath][key][subKey];
+                    }
                 }
             }
         }
-    }
 
-    // Merge new results
-    Object.assign(globalResults[filePath], results);
+        // Merge new results
+        Object.assign(globalResults[filePath], results);
 
-    // Ensure we're not overwriting functionCallRelationships if it already exists
-    if (!globalResults[filePath].functionCallRelationships) {
-        globalResults[filePath].functionCallRelationships = {};
-    }
-    Object.assign(globalResults[filePath].functionCallRelationships, results.functionCallRelationships);
-
-    // Clean up old global declarations
-    for (const [name, declaration] of Object.entries(globalDeclarations)) {
-        if (declaration.analysisId !== currentAnalysisId) {
-            delete globalDeclarations[name];
+        // Ensure we're not overwriting functionCallRelationships if it already exists
+        if (!globalResults[filePath].functionCallRelationships) {
+            globalResults[filePath].functionCallRelationships = {};
         }
+        Object.assign(globalResults[filePath].functionCallRelationships, results.functionCallRelationships);
+
+        // Clean up old global declarations
+        for (const [name, declaration] of Object.entries(globalDeclarations)) {
+            if (declaration.analysisId !== currentAnalysisId) {
+                delete globalDeclarations[name];
+            }
+        }
+
+        // After generating IDs for functions and classes:
+        results.functions?.forEach(func => {
+            func.id = resolveIdConflict(func.id);
+        });
+        results.classes?.forEach(cls => {
+            cls.id = resolveIdConflict(cls.id);
+        });
+
+        return results;
+
+    } catch (error) {
+        console.error(`Error analyzing file ${filePath}:`, error);
+        return { error: error.message };
     }
-
-    // After generating IDs for functions and classes:
-    results.functions?.forEach(func => {
-        func.id = resolveIdConflict(func.id);
-    });
-    results.classes?.forEach(cls => {
-        cls.id = resolveIdConflict(cls.id);
-    });
-
-    return results;
 }
 
 export function detectLanguageFromExtension(extension) {

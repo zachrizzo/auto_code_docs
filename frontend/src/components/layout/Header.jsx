@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { AppBar, Toolbar, Typography, IconButton, Box } from '@mui/material';
 import { Link } from 'react-router-dom';
-import HomeIcon from '@mui/icons-material/Home';
-import Brightness4Icon from '@mui/icons-material/Brightness4';
-import Brightness7Icon from '@mui/icons-material/Brightness7';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SettingsPanel from '../settings/panel';
+import HomeIcon from '@mui/icons-material/Home.js';
+import Brightness4Icon from '@mui/icons-material/Brightness4.js';
+import Brightness7Icon from '@mui/icons-material/Brightness7.js';
+import SettingsIcon from '@mui/icons-material/Settings.js';
+import SettingsPanel from '../settings/SettingPanel.jsx';
 
 const Header = ({ darkMode, toggleDarkMode }) => {
     const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
@@ -53,7 +53,7 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                         <IconButton onClick={handleToggleSettings} color="inherit">
                             <SettingsIcon />
                         </IconButton>
-                        <IconButton sx={{ marginLeft: 5 }} component={Link} to="/" color="inherit">
+                        <IconButton sx={{ marginLeft: 5 }} component={Link} to="/main_window" color="inherit">
                             <HomeIcon />
                         </IconButton>
                     </Box>

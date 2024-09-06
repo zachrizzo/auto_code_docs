@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
-import { auth } from '../firebase/firebase';
+import { auth, db } from '../firebase/firebase.js';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';  // Assuming you're using react-router for navigation
+import { addDoc, collection } from 'firebase/firestore';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -11,16 +12,21 @@ const Login = () => {
 
     const handleLogin = async () => {
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            console.log('User logged in:', userCredential.user);
+            await signInWithEmailAndPassword(auth, email, password);
+            console.log('Login successful');
         } catch (error) {
             console.error('Error logging in:', error);
+            if (error.code === 'auth/network-request-failed') {
+                alert('Network error. Please check your internet connection.');
+            } else {
+                alert('Login failed. Please check your credentials and try again.');
+            }
         }
     };
 
     const handleSignUpRedirect = () => {
-        navigate('/signup'); // Redirect to the signup page
-    };
+        navigate('/signUp')
+    }
 
     return (
         <Container maxWidth="xs">

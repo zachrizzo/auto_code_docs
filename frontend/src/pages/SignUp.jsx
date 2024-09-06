@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
-import { db, auth, functions } from '../firebase/firebase';
+import { db, auth, functions } from '../firebase/firebase.js';
 import { useNavigate } from 'react-router-dom';
 import { httpsCallable } from "firebase/functions";
 

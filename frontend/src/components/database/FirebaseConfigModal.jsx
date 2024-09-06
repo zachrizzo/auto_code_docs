@@ -6,7 +6,7 @@ import {
     Box,
     Modal,
 } from '@mui/material';
-import ModalContent from '../styled/modalContent';
+import ModalContent from '../styled/ModalContent.jsx';
 
 
 const FirebaseConfigModal = ({ open, handleClose, firebaseConfig, setFirebaseConfig, handleSave, handleDelete }) => {

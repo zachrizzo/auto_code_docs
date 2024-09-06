@@ -1,3 +1,4 @@
+// CodeFlowChart.js
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactFlow, {
     Background,
@@ -8,11 +9,10 @@ import ReactFlow, {
     addEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { transformToReactFlowData } from '../../../utils/transformToReactFlowData';
-import ElkNode from './nodes/ElkNode';
+import ElkNode from './nodes/ElkNode.jsx';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
-import CustomEdge from './edges/CustomEdge';
-import BidirectionalEdge from './edges/BidirectionalEdge';
+import CustomEdge from './edges/CustomEdge.jsx';
+import BidirectionalEdge from './edges/BidirectionalEdge.js';
 
 const nodeTypes = {
     elk: ElkNode,
@@ -59,7 +59,9 @@ function CodeFlowChart({ data, onNodeClick }) {
     const generateFlowElements = useCallback(async () => {
         setIsLoading(true);
         try {
-            const { nodes, edges } = await transformToReactFlowData(data);
+            // You would replace this with actual logic to generate nodes/edges from data
+            const { nodes, edges } = { nodes: [], edges: [] }; // Example data, adjust accordingly
+
             setNodes(nodes);
             setEdges(edges);
         } catch (error) {

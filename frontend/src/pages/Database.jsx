@@ -24,8 +24,8 @@ import {
 } from '@mui/material';
 import Store from 'electron-store';
 import { useTheme } from '@mui/material/styles';
-import FirebaseConfigModal from '../components/database/FirebaseConfigModal';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FirebaseConfigModal from '../components/database/FirebaseConfigModal.jsx';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
 
 const store = new Store({
     name: 'FirebaseConfigManager',

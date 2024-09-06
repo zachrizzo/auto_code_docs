@@ -1,4 +1,3 @@
-// CustomEdge.js
 import React from 'react';
 import { EdgeText, getBezierPath } from 'reactflow';
 import { Box } from '@mui/material';

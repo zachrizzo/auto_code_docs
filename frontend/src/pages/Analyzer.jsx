@@ -1,13 +1,16 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Button, Container, Select, MenuItem, Typography, Box } from '@mui/material';
-import BorderedTreeView from '../components/analyzer/TreeDocumentation';
-import CodeFlowChart from '../components/analyzer/mindMap/mindMap';
-import { getAIDescription } from "../api/CodeDocumentation";
-import { detectClassesAndFunctions, resolveCrossFileDependencies } from '../utils/detector/detector';
-import { transformToReactFlowData } from '../utils/transformToReactFlowData'; // Import the transformation utility
-const { ipcRenderer } = require('electron');
-const fs = window.require('fs');
-const path = window.require('path');
+import BorderedTreeView from '../components/analyzer/TreeDocumentation.js';
+import CodeFlowChart from '../components/analyzer/mindMap/CodeMap.jsx';
+import { getAIDescription } from "../api/CodeDocumentation.js";
+
+// // Use the ipcRenderer exposed via preload script
+const { ipcRenderer } = window.electronAPI;
+
+// // Use fs and path methods exposed via preload script
+// const fs = window.electronAPI;
+// const path = window.electronAPI;
+
 
 const Analyzer = () => {
     const [language, setLanguage] = useState('javascript');
@@ -17,52 +20,24 @@ const Analyzer = () => {
     const [watchingDir, setWatchingDir] = useState('/Users/zachrizzo/programing/auto_code_docs_app/testCode/languageTest');
     const [viewMode, setViewMode] = useState('map');
 
+
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
             alert('Please select a directory to analyze.');
             return;
         }
 
-        let aggregatedResults = {};
-
-        const analyzeFile = async (filePath) => {
-            const fileContent = fs.readFileSync(filePath, 'utf8');
-            const fileExtension = path.extname(filePath); // Get the file extension
-
-            const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
-
-            console.log(`Analysis results for ${filePath}:`, analysisResults);
-
-            // Use filePath as the key to avoid overwriting
-            aggregatedResults[filePath] = analysisResults;
-        };
-
-        const walkDirectory = async (dir) => {
-            const files = fs.readdirSync(dir);
-
-            files.forEach((file) => {
-                const filePath = path.join(dir, file);
-                const stat = fs.statSync(filePath);
-
-                if (stat.isDirectory()) {
-                    walkDirectory(filePath);
-                } else if (file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) {
-                    analyzeFile(filePath);
-                }
-            });
-        };
-
-        await walkDirectory(watchingDir);
-
-        console.log("Aggregated Results Before Dependency Resolution:", aggregatedResults);
-
-        // Resolve cross-file dependencies
-        const resolvedResults = resolveCrossFileDependencies(aggregatedResults);
-
-        console.log("Aggregated Results After Dependency Resolution:", resolvedResults);
-
-        setResults(resolvedResults);
-    }, [language, watchingDir]);
+        try {
+            console.log('Renderer: About to invoke analyze-directory');
+            const analysisResults = await ipcRenderer.invoke('analyze-directory', watchingDir, language);
+            console.log('Renderer: Received results from main process');
+            console.log("Analysis Results:", analysisResults);
+            setResults(analysisResults);
+        } catch (error) {
+            console.error("Renderer: Error during analysis:", error);
+            alert("An error occurred during analysis. Please check the console for details.");
+        }
+    }, [watchingDir, language]);
 
 
 
