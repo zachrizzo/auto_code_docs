@@ -1,0 +1,150 @@
+# My Electron, React, and Firebase Project
+
+## Project Overview
+
+This project is an Electron application integrated with React and Firebase, designed to create a modern desktop application with features like user authentication, dark/light theme toggle, and a code analyzer using `tree-sitter` for detecting and resolving cross-file dependencies.
+
+The frontend is built with React using Material UI for styling, and Firebase handles user authentication. Electron is used to provide a desktop environment, and `tree-sitter` is utilized to analyze and parse code files, written in C++ for native bindings.
+
+## Table of Contents
+
+- [My Electron, React, and Firebase Project](#my-electron-react-and-firebase-project)
+  - [Project Overview](#project-overview)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Installing Electron Rebuild](#installing-electron-rebuild)
+  - [Xcode Command Line Tools (macOS)](#xcode-command-line-tools-macos)
+  - [Usage](#usage)
+  - [Features](#features)
+  - [Code Example (Electron Main Process)](#code-example-electron-main-process)
+  - [C++ and tree-sitter Integration](#c-and-tree-sitter-integration)
+  - [Steps Taken:](#steps-taken)
+  - [Firebase Integration](#firebase-integration)
+  - [Dark Mode Example](#dark-mode-example)
+  - [License](#license)
+
+## Installation
+
+To get started, clone the repository and install the dependencies:
+
+`git clone https://github.com/your-username/your-project.git
+cd your-project
+npm install`
+
+## Installing Electron Rebuild
+
+Since this project involves native modules like tree-sitter, you need to ensure they are rebuilt for Electron:
+
+`npm install --save-dev @electron/rebuild
+npx electron-rebuild`
+Make sure you have the required C++ compiler and development environment installed.
+
+## Xcode Command Line Tools (macOS)
+
+If you are on macOS, make sure you have the Xcode Command Line Tools installed:
+
+`xcode-select --install`
+You may also need to update the tools:
+
+`sudo softwareupdate --all --install --force`
+
+## Usage
+
+To run the application in development mode:
+
+`npm run start`
+This will launch the Electron app and serve the React frontend.
+
+## Features
+
+1. Firebase Authentication
+   Firebase handles user authentication using email and password.
+   Authentication state is tracked within React and managed using onAuthStateChanged from Firebase.
+1. Code Analyzer using tree-sitter
+   The app includes a file analyzer that parses JavaScript, Python, and JSX files for class and function declarations using tree-sitter.
+   It also resolves cross-file dependencies to show connections between different code files.
+1. Theming and UI
+   The app supports both dark and light themes using Material UI.
+   The theme can be toggled by users dynamically.
+   Scripts
+   Here are the key NPM scripts defined in the package.json:
+
+npm start: Starts the Electron app in development mode.
+npm run rebuild: Rebuilds native modules using electron-rebuild, particularly necessary for tree-sitter.
+npm run package: Packages the app for distribution using electron-forge.
+npm run make: Builds the app into an installer.
+npm run publish: Publishes the app to an online repository.
+Electron Integration
+The Electron app is configured with the following features:
+
+Preload Script: The app uses a preload script for secure communication between the renderer and the main process.
+Content Security Policy: The app enforces a strict content security policy to prevent code injection attacks.
+File Analysis: The app listens for file selection and code analysis via IPC communication between the Electron main process and React.
+
+## Code Example (Electron Main Process)
+
+`const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
+const { detectClassesAndFunctions, resolveCrossFileDependencies } = require('./utils/detector/detector.js');
+app.whenReady().then(() => {
+createWindow();
+
+ipcMain.handle('analyze-directory', async (event, watchingDir, language) => {
+// File analysis logic here...
+});
+
+ipcMain.handle('select-directory', async () => {
+const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+return result.filePaths[0];
+});
+});`
+
+## C++ and tree-sitter Integration
+
+In this project, tree-sitter is used to analyze source code for class and function definitions and to resolve cross-file dependencies. Since tree-sitter has native bindings written in C++, we faced some challenges during the build process that required the following steps:
+
+## Steps Taken:
+
+Rebuilding tree-sitter: To ensure compatibility with Electron, we had to rebuild tree-sitter using electron-rebuild and configure the build to use C++20.
+
+Setting C++ Flags: Since tree-sitter requires C++20, we had to manually set the environment flag for the build process:
+
+`export CXXFLAGS="--std=c++20"
+npx electron-rebuild -f -w tree-sitter`
+
+Xcode Configuration (macOS): On macOS, we ensured that the Xcode Command Line Tools were installed and up to date to allow for C++ compilation.
+
+These steps ensure that tree-sitter can be properly rebuilt and used within the Electron app to analyze code files.
+
+## Firebase Integration
+
+The app uses Firebase for user authentication. The following Firebase services are used:
+
+Firebase Auth: Handles user sign-in and sign-out functionality.
+Firebase Firestore: Can be used to store user data (not implemented in this snippet, but easy to add).
+Firebase Configuration Example
+
+`import { auth } from './firebase/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+
+useEffect(() => {
+const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+setUser(currentUser);
+});
+return () => unsubscribe();
+}, []);
+`
+Theming and Styling
+Material UI is used to handle the styling of the React components. The app supports both dark and light themes, which can be toggled by the user.
+
+## Dark Mode Example
+
+`const darkTheme = createTheme({
+palette: {
+mode: 'dark',
+background: { default: '#0C1826' },
+primary: { main: '#7C64F9' },
+text: { primary: '#ffffff' },
+},
+});`
+
+## License

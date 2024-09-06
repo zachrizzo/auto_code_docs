@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import { Button, Stack, Container, TextField, Select, MenuItem, Typography, Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { GlobalStyles } from '@mui/system';
-import Analyzer from './pages/Analyzer.jsx';
+// import Analyzer from './pages/Analyzer';
 // import { initializeParser } from '../utils/detector/detector';
-import Header from './components/layout/Header.jsx';
-// import DatabaseManagementPage from './pages/Database.jsx';
-import SignUp from './pages/SignUp.jsx';
+// import Header from './components/layout/Header';
+// import DatabaseManagementPage from './pages/database';
+// import SignUp from '../../pages/signUp';
 import { onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth methods
-import Login from './pages/LoginPage.jsx'
-import { auth } from './firebase/firebase.js'
+import Login from './pages/LoginPage';
+import { auth } from './firebase/firebase'
 
 
 const lightThemeColors = {
@@ -294,17 +294,37 @@ function Home() {
 function App() {
     const [darkMode, setDarkMode] = useState(true);
     const [user, setUser] = useState(null); // State to track the authenticated user
+    // const webviewRef = useRef(null); // Ref to handle the webview
 
     useEffect(() => {
-        // initializeParser(); // Initialize parser or any other setups
+        initializeParser(); // Initialize parser or any other setups
 
         // Set up Firebase auth state listener
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
             setUser(currentUser); // Update user state based on auth state
         });
 
+        // // Setup webview event listeners
+        // if (webviewRef.current) {
+        //     const webview = webviewRef.current;
 
+        //     webview.addEventListener('dom-ready', () => {
+        //         console.log('Webview is ready');
+        //         webview.executeJavaScript(`console.log('Hello from webview!')`);
+        //     });
 
+        //     webview.addEventListener('ipc-message', (event) => {
+        //         console.log('Received IPC message from webview:', event.channel);
+        //     });
+        // }
+
+        // Cleanup subscription on unmount
+        return () => {
+            unsubscribe();
+            if (webviewRef.current) {
+                webviewRef.current.removeEventListener('ipc-message', () => { });
+            }
+        };
     }, []);
 
     console.log(auth.currentUser);
@@ -325,19 +345,26 @@ function App() {
             />
             <Router>
                 {/* Optional: Show Header if user is logged in */}
-                {user && <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
+                {/* {user && <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />} */}
                 <Container>
                     <Routes>
                         {/* If user is logged in, show Home; otherwise, show Login */}
-                        <Route path="/main_window" element={auth?.currentUser ? <Home /> : <Login />} />
+                        <Route path="/" element={<Home />} />
                         {/* Additional routes for other components */}
-                        <Route path="/analyze" element={<Analyzer />} />
-                        {/* <Route path="/database" element={<DatabaseManagementPage />} /> */}
+                        {/* <Route path="/analyze" element={<Analyzer />} />
+                        <Route path="/database" element={<DatabaseManagementPage />} />
                         <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<SignUp />} />
+                        <Route path="/signup" element={<SignUp />} /> */}
                     </Routes>
 
-
+                    {/* Webview Element */}
+                    {/* <webview
+                        ref={webviewRef}
+                        src="https://example.com" // URL to load in the webview
+                        style={{ width: '100%', height: '600px', marginTop: '20px' }}
+                        nodeintegration="false"
+                        preload="./webview-preload.js" // Ensure this is correctly set up
+                    /> */}
                 </Container>
             </Router>
         </ThemeProvider>
