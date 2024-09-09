@@ -1,8 +1,11 @@
 
-import crypto from 'crypto';
-import path from 'path';
+
+import { createHash } from 'crypto';
+import { relative, isAbsolute } from 'path';
 import FunctionHandler from './functions';
 import ClassHandler from './classes';
+
+
 
 const langs = {
     python: {
@@ -134,12 +137,12 @@ class ASTDetectionHandler {
     }
 
     isInWatchedDir(filePath) {
-        const relativePath = path.relative(this.watchedDir, filePath);
-        return relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+        const relativePath = relative(this.watchedDir, filePath);
+        return relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath);
     }
 
     getUniqueId(code) {
-        return crypto.createHash('sha256').update(code).digest('hex');
+        return createHash('sha256').update(code).digest('hex');
     }
 
     isFunctionNode(nodeType) {
@@ -332,4 +335,5 @@ class ASTDetectionHandler {
     }
 }
 
-export default ASTDetectionHandler;
+const _default = ASTDetectionHandler;
+export { _default as default };

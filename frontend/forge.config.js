@@ -5,6 +5,7 @@ const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 module.exports = {
   packagerConfig: {
     asar: true,
+    asarUnpack: "**/*.wasm"
   },
   rebuildConfig: {},
   makers: [

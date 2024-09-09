@@ -1,9 +1,11 @@
-import * as Parser from 'web-tree-sitter';
-import ASTDetectionHandler from './ast/ast';
+import ASTDetectionHandler from './ast/ast.js';
+import { readFile, readdir, stat as _stat } from 'fs/promises';
+import { extname, join } from 'path';
+import Parser from 'web-tree-sitter';
 
 let parsers = {};
-let globalResults = {}; // To store parsed results for all files
-let globalDeclarations = {}; // Global storage for all declarations across files, indexed by name
+let globalResults = {};
+let globalDeclarations = {};
 let currentAnalysisId = 0;
 let globalIds = new Set();
 let globalFunctionNameToId = {};
@@ -12,24 +14,31 @@ const languageExtensions = {
     '.js': 'javascript',
     '.jsx': 'javascript',
     '.py': 'python',
-    // Add more extensions and languages here if needed
 };
 
+// Initialize the parsers for JavaScript and Python
 export async function initializeParser() {
-    await Parser.init({
-        locateFile(scriptName) {
-            return scriptName;
-        },
-    });
+    // Initialize the WebAssembly for Tree-sitter
+    await Parser.init();
 
-    const JavaScript = await Parser.Language.load('dist/tree-sitter-javascript.wasm');
-    const Python = await Parser.Language.load('dist/tree-sitter-python.wasm');
+    // Create a new parser instance
+    const parser = new Parser();
 
-    parsers.javascript = JavaScript;
-    parsers.python = Python;
+    // Load the WebAssembly files dynamically using Electron's require method
+    const JavaScript = await parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-javascript.wasm'));
+    const Python = await parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-python.wasm'));
+
+    // Return an object with the parser configurations
+    parsers = {
+        main: parser,
+        javascript: JavaScript,
+        python: Python
+    };
+
+    return parsers;
 }
 
-function resolveIdConflict(id) {
+export function resolveIdConflict(id) {
     let newId = id;
     let counter = 1;
     while (globalIds.has(newId)) {
@@ -46,10 +55,12 @@ export function detectLanguageFromFileName(fileName) {
 }
 
 export async function detectClassesAndFunctions(code, filePath, fileExtension, watchedDir) {
+    console.log(`Analyzing file: ${filePath}`);
     try {
         const language = detectLanguageFromExtension(fileExtension);
 
         if (!language || !parsers[language]) {
+            console.log('Initializing parser for language:', language);
             await initializeParser();
         }
 
@@ -78,14 +89,12 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         const tree = parser.parse(code);
         const cursor = tree.walk();
 
-        // Single pass: Detect functions, classes, and function calls
+        console.log('Traversing and detecting...');
         ASTDetection.traverseAndDetect(cursor);
 
         currentAnalysisId++;
 
-        ASTDetection.finalizeRelationships();
-        currentAnalysisId++;
-
+        console.log('Finalizing relationships...');
         ASTDetection.finalizeRelationships();
 
         // Update globalResults
@@ -130,6 +139,7 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
             cls.id = resolveIdConflict(cls.id);
         });
 
+        console.log(`Analysis complete for file: ${filePath}`);
         return results;
 
     } catch (error) {
@@ -149,6 +159,7 @@ export function detectLanguageFromExtension(extension) {
 }
 
 export function resolveCrossFileDependencies() {
+    console.log('Resolving cross-file dependencies...');
     // Create a global map of all functions
     const allFunctions = new Map();
     for (const [fileName, fileResults] of Object.entries(globalResults)) {
@@ -165,12 +176,10 @@ export function resolveCrossFileDependencies() {
 
         // Resolve deferred function calls
         if (sourceFileResults.deferredFunctionCalls) {
-
             sourceFileResults.deferredFunctionCalls.forEach(({ callerNodeId, calledFunctionName }) => {
                 const calledFunctionIds = globalFunctionNameToId[calledFunctionName] || [];
                 if (calledFunctionIds.length > 0) {
                     calledFunctionIds.forEach(calledFunctionId => {
-
                         if (!sourceFileResults.allCalledFunctions[calledFunctionId]) {
                             sourceFileResults.allCalledFunctions[calledFunctionId] = [];
                         }
@@ -187,11 +196,64 @@ export function resolveCrossFileDependencies() {
             });
             delete sourceFileResults.deferredFunctionCalls;
         }
-
     }
 
+    console.log("Cross-file dependencies resolved.");
     console.log("Updated globalResults:", globalResults);
-    console.log('globalFunctionNameToId', globalFunctionNameToId)
+    console.log('globalFunctionNameToId', globalFunctionNameToId);
 
     return globalResults;
 }
+
+
+// New function to handle directory analysis
+export async function analyzeDirectory(watchingDir, language) {
+    console.log(`Analyzing directory: ${watchingDir}`);
+    let aggregatedResults = {};
+
+    const analyzeFile = async (filePath) => {
+        console.log(`Reading file: ${filePath}`);
+        const fileContent = await readFile(filePath, 'utf8');
+        const fileExtension = extname(filePath);
+
+        console.log(`Detecting classes and functions in: ${filePath}`);
+        const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
+
+        console.log(`Analysis results for ${filePath}:`, analysisResults);
+        aggregatedResults[filePath] = analysisResults;
+    };
+
+    const walkDirectory = async (dir) => {
+        console.log(`Walking directory: ${dir}`);
+        const files = await readdir(dir);
+
+        for (const file of files) {
+            const filePath = join(dir, file);
+            const stat = await _stat(filePath);
+
+            console.log('File stats:', { file, stat });
+
+            if (stat.isDirectory()) {
+                await walkDirectory(filePath);
+            } else if (file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) {
+                await analyzeFile(filePath);
+            }
+        }
+        console.log(`Finished walking directory: ${dir}`);
+    };
+
+    try {
+        await walkDirectory(watchingDir);
+        console.log('Directory analysis complete.');
+        console.log('Resolving cross-file dependencies...');
+        const finalResults = resolveCrossFileDependencies();
+        console.log('Analysis process complete. Returning results.');
+        return finalResults;
+    } catch (error) {
+        console.error('Error during directory analysis:', error);
+        throw error;
+    }
+}
+
+
+

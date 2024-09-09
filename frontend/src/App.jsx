@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import { Button, Stack, Container, TextField, Select, MenuItem, Typography, Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer.jsx';
-// import { initializeParser } from '../utils/detector/detector';
 import Header from './components/layout/Header.jsx';
 // import DatabaseManagementPage from './pages/Database.jsx';
 import SignUp from './pages/SignUp.jsx';
@@ -296,15 +295,29 @@ function App() {
     const [user, setUser] = useState(null); // State to track the authenticated user
 
     useEffect(() => {
-        // initializeParser(); // Initialize parser or any other setups
+        const initParser = async () => {
+            try {
+                const result = await window.electronAPI.initializeParser();
+                if (result.success) {
+                    console.log('Parser initialized successfully');
+                } else {
+                    console.error('Failed to initialize parser:', result.error);
+                }
+            } catch (error) {
+                console.error('Error calling initializeParser:', error);
+            }
+        };
 
         // Set up Firebase auth state listener
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-            setUser(currentUser); // Update user state based on auth state
+            setUser(currentUser);
         });
 
+        initParser();
 
-
+        return () => {
+            unsubscribe();
+        };
     }, []);
 
     console.log(auth.currentUser);

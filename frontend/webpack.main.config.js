@@ -1,24 +1,38 @@
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
-
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+const path = require('path');  // Add path module import here
 
 module.exports = {
-  /**
-   * This is the main entry point for your application, it's the first file
-   * that runs in the main process.
-   */
   entry: './src/main.js',
-  // Put your normal webpack config below here
+
   module: {
     rules: require('./webpack.rules'),
   },
 
+  experiments: {
+    asyncWebAssembly: true
+  },
+
   plugins: [
-    new NodePolyfillPlugin()
+    new NodePolyfillPlugin(),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, '../frontend/.wasm'),  // Source folder with .wasm files
+          to: path.resolve(__dirname, '../frontend/.webpack/main')  // Destination folder in .webpack/main
+        }
+      ]
+    })
   ],
+
+  externals: {
+    'tree-sitter': 'commonjs tree-sitter'  // Ensure that Tree-sitter is properly resolved
+  },
+
   resolve: {
     fallback: {
-      "fs": false,
-      "path": require.resolve("path-browserify")
+      fs: false,  // Disable fs, since it’s not needed for the browser
+      path: require.resolve("path-browserify")  // Resolve path using path-browserify
     }
   }
 };

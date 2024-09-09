@@ -37,6 +37,7 @@ Since this project involves native modules like tree-sitter, you need to ensure 
 
 `npm install --save-dev @electron/rebuild
 npx electron-rebuild`
+
 Make sure you have the required C++ compiler and development environment installed.
 
 ## Xcode Command Line Tools (macOS)
@@ -96,7 +97,7 @@ ipcMain.handle('select-directory', async () => {
 const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
 return result.filePaths[0];
 });
-});`
+}); `
 
 ## C++ and tree-sitter Integration
 
@@ -109,7 +110,7 @@ Rebuilding tree-sitter: To ensure compatibility with Electron, we had to rebuild
 Setting C++ Flags: Since tree-sitter requires C++20, we had to manually set the environment flag for the build process:
 
 `export CXXFLAGS="--std=c++20"
-npx electron-rebuild -f -w tree-sitter`
+npx electron-rebuild -f -w tree-sitter `
 
 Xcode Configuration (macOS): On macOS, we ensured that the Xcode Command Line Tools were installed and up to date to allow for C++ compilation.
 

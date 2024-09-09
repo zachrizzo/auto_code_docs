@@ -3,13 +3,15 @@ const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
 
 const path = require('path');
 const fs = require('fs').promises;
-const { detectClassesAndFunctions, resolveCrossFileDependencies } = require('./utils/detector/detector.js');
+const { analyzeDirectory, initializeParser } = require('./utils/detector/detector.js');
 
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+
 
 
 
@@ -58,53 +60,30 @@ app.whenReady().then(() => {
   createWindow();
 
 
-  console.log('Main: Setting up analyze-directory handler');
+  ipcMain.handle('initialize-parser', async () => {
+    try {
+      await initializeParser();
+      return { success: true };
+    } catch (error) {
+      console.error('Error initializing parser:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // IPC handler
   ipcMain.handle('analyze-directory', async (event, watchingDir, language) => {
     console.log('Main: analyze-directory invoked', { watchingDir, language });
-    let aggregatedResults = {};
-
-    console.log('Analyzing')
-
-    const analyzeFile = async (filePath) => {
-      const fileContent = await fs.readFile(filePath, 'utf8');
-      const fileExtension = path.extname(filePath);
-
-      const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
-
-      console.log(`Analysis results for ${filePath}:`, analysisResults);
-
-      aggregatedResults[filePath] = analysisResults;
-    };
-
-    const walkDirectory = async (dir) => {
-      const files = await fs.readdir(dir);
-
-      for (const file of files) {
-        const filePath = path.join(dir, file);
-        const stat = await fs.stat(filePath);
-
-        console.log('stat', stat)
-
-        if (stat.isDirectory()) {
-          await walkDirectory(filePath);
-        } else if (file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) {
-          await analyzeFile(filePath);
-        }
-      }
-    };
-
-
-
-    await walkDirectory(watchingDir);
-
-    console.log("Aggregated Results Before Dependency Resolution:", aggregatedResults);
-
-    const resolvedResults = resolveCrossFileDependencies(aggregatedResults);
-
-    console.log("Aggregated Results After Dependency Resolution:", resolvedResults);
-
-    return resolvedResults;
+    try {
+      const results = await analyzeDirectory(watchingDir, language);
+      console.log('Analysis complete. Sending results back to renderer.');
+      return results;
+    } catch (error) {
+      console.error('Error in analyze-directory handler:', error);
+      throw error;
+    }
   });
+
+
 
 
 
