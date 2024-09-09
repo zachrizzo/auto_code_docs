@@ -24,9 +24,12 @@ export async function initializeParser() {
     // Create a new parser instance
     const parser = new Parser();
 
-    // Load the WebAssembly files dynamically using Electron's require method
-    const JavaScript = await parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-javascript.wasm'));
-    const Python = await parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-python.wasm'));
+    // Load the WebAssembly files correctly
+    const JavaScript = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-javascript.wasm'));
+    const Python = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-python.wasm'));
+
+    // Set the language for the parser
+    parser.setLanguage(JavaScript);  // You can change this dynamically as needed
 
     // Return an object with the parser configurations
     parsers = {
