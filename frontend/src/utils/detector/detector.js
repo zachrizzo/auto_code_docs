@@ -1,7 +1,9 @@
 import ASTDetectionHandler from './ast/ast.js';
 import { readFile, readdir, stat as _stat } from 'fs/promises';
-import { extname, join } from 'path';
+import { relative, join, extname } from 'path';
 import Parser from 'web-tree-sitter';
+import { createReadStream } from 'fs';
+import ignore from 'ignore';  // You can install this package via npm to handle .gitignore patterns
 
 let parsers = {};
 let globalResults = {};
@@ -208,33 +210,49 @@ export function resolveCrossFileDependencies() {
     return globalResults;
 }
 
+async function loadIgnorePatterns(dir) {
+    const ig = ignore();
+    const gitIgnorePath = join(dir, '.gitignore');
+    const fractalIgnorePath = join(dir, 'ignore.fractal');
 
-// New function to handle directory analysis
+    const addPatternsFromFile = async (filePath) => {
+        try {
+            const content = await readFile(filePath, 'utf8');
+            ig.add(content.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')));
+        } catch (error) {
+            console.warn(`Failed to read ignore file: ${filePath}`);
+        }
+    };
+
+    await addPatternsFromFile(gitIgnorePath);
+    await addPatternsFromFile(fractalIgnorePath);
+
+    return ig;
+}
+
 export async function analyzeDirectory(watchingDir) {
     console.log(`Analyzing directory: ${watchingDir}`);
     let aggregatedResults = {};
+    const ig = await loadIgnorePatterns(watchingDir);
 
     const analyzeFile = async (filePath) => {
         console.log(`Reading file: ${filePath}`);
         const fileContent = await readFile(filePath, 'utf8');
         const fileExtension = extname(filePath);
-
         const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
-
         aggregatedResults[filePath] = analysisResults;
     };
 
     const walkDirectory = async (dir) => {
         const files = await readdir(dir);
-
         for (const file of files) {
             const filePath = join(dir, file);
             const stat = await _stat(filePath);
 
-
             if (stat.isDirectory()) {
                 await walkDirectory(filePath);
-            } else if (file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) {
+            } else if ((file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) && !ig.ignores(relative(watchingDir, filePath))) {
+
                 await analyzeFile(filePath);
             }
         }
@@ -243,13 +261,9 @@ export async function analyzeDirectory(watchingDir) {
     try {
         await walkDirectory(watchingDir);
         const finalResults = resolveCrossFileDependencies();
-
         return finalResults;
     } catch (error) {
         console.error('Error during directory analysis:', error);
         throw error;
     }
 }
-
-
-

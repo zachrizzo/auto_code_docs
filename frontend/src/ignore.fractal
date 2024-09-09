@@ -1,0 +1,23 @@
+# ignore.fractal
+
+# Ignore all files in the node_modules directory
+firebase/functions/node_modules
+
+# Ignore all build files
+build/
+dist/
+
+# Ignore specific file types
+*.log
+*.tmp
+*.bak
+
+# Ignore files by name
+secret.config
+.env
+
+# Ignore all JavaScript files in the "scripts" directory
+scripts/*.js
+
+# Ignore any file in the "test" folder
+test/*

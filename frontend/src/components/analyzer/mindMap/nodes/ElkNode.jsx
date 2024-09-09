@@ -95,7 +95,7 @@ function ElkNode({ data }) {
                         {data.label}
                     </Typography>
                     {expanded && (
-                        <Box sx={{ mt: 1, maxHeight: 300, overflow: 'auto' }}>
+                        <Box sx={{ mt: 1 }}>
                             <SyntaxHighlighter language={language} style={oneDark}>
                                 {data.code || 'No code available'}
                             </SyntaxHighlighter>
@@ -118,7 +118,7 @@ function ElkNode({ data }) {
                     </div>
                 </CardContent>
             </Card>
-        </ Box>
+        </Box>
     );
 }
 
