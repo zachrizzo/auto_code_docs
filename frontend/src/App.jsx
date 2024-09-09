@@ -345,12 +345,9 @@ function App() {
                         <Route path="/main_window" element={auth?.currentUser ? <Home /> : <Login />} />
                         {/* Additional routes for other components */}
                         <Route path="/analyze" element={<Analyzer />} />
-                        {/* <Route path="/database" element={<DatabaseManagementPage />} /> */}
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<SignUp />} />
                     </Routes>
-
-
                 </Container>
             </Router>
         </ThemeProvider>
@@ -359,15 +356,4 @@ function App() {
 
 export default App;
 
-
-// import React from 'react'
-
-// function App() {
-
-//     return (
-//         <div>hi</div>
-//     );
-// }
-
-// export default App
 

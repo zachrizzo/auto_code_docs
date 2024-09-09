@@ -7,7 +7,6 @@ import { getAIDescription } from "../api/CodeDocumentation.js";
 const { ipcRenderer } = window.electronAPI;
 
 const Analyzer = () => {
-    const [language, setLanguage] = useState('javascript');
     const [results, setResults] = useState({});
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
@@ -22,16 +21,22 @@ const Analyzer = () => {
         }
 
         try {
-            console.log('Renderer: About to invoke analyze-directory');
-            const analysisResults = await ipcRenderer.invoke('analyze-directory', watchingDir, language);
-            console.log('Renderer: Received results from main process');
-            console.log("Analysis Results:", analysisResults);
-            setResults(analysisResults);
+            const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir);
+
+            // Deserialize the received strings back to objects
+            const parsedAnalysisResults = JSON.parse(analysisResults);
+            const parsedGraphData = JSON.parse(graphData);
+
+            console.log("Analysis Results:", parsedAnalysisResults);
+            console.log("Graph Data:", parsedGraphData);
+            setResults(parsedGraphData);
         } catch (error) {
             console.error("Renderer: Error during analysis:", error);
             alert("An error occurred during analysis. Please check the console for details.");
         }
-    }, [watchingDir, language]);
+    }, [watchingDir]);
+
+
 
 
 
@@ -128,17 +133,7 @@ const Analyzer = () => {
                     Watching directory: {watchingDir}
                 </Typography>
             )}
-            <Select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                fullWidth
-                margin="normal"
-                variant="outlined"
-                sx={{ my: 10 }}
-            >
-                <MenuItem value="javascript">JavaScript</MenuItem>
-                <MenuItem value="python">Python</MenuItem>
-            </Select>
+
             <Button variant="contained" color="primary" onClick={handleAnalyze}>
                 Analyze
             </Button>

@@ -19,8 +19,8 @@ if (require('electron-squirrel-startup')) {
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1280,
+    height: 900,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true,  // Enable context isolation for security
@@ -71,19 +71,28 @@ app.whenReady().then(() => {
     }
   });
 
-  // IPC handler
-  ipcMain.handle('analyze-directory', async (event, watchingDir, language) => {
-    console.log('Main: analyze-directory invoked', { watchingDir, language });
+  ipcMain.handle('analyze-directory', async (event, watchingDir) => {
+    console.log('Main: analyze-directory invoked', { watchingDir });
     try {
-      const results = await analyzeDirectory(watchingDir, language);
-      const elkResults = transformToReactFlowData(results);
-      console.log('Analysis complete. Sending results back to renderer.');
-      return elkResults;
+      const results = await analyzeDirectory(watchingDir);
+      const elkResults = await transformToReactFlowData(results);
+
+      // Ensure the results and elkResults are serializable
+      const serializedResults = JSON.stringify(results);
+      const serializedElkResults = JSON.stringify(elkResults);
+
+      // Return the serialized data as strings
+      return {
+        analysisResults: serializedResults,
+        graphData: serializedElkResults
+      };
     } catch (error) {
       console.error('Error in analyze-directory handler:', error);
       throw error;
     }
   });
+
+
 
 
 

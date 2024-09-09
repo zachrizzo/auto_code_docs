@@ -13,6 +13,10 @@ module.exports = {
     asyncWebAssembly: true
   },
 
+  devServer: {
+    historyApiFallback: true,  // This tells Webpack to serve index.html for all 404 routes
+  },
+
   plugins: [
     new NodePolyfillPlugin(),
     new CopyWebpackPlugin({

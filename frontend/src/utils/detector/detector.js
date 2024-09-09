@@ -210,7 +210,7 @@ export function resolveCrossFileDependencies() {
 
 
 // New function to handle directory analysis
-export async function analyzeDirectory(watchingDir, language) {
+export async function analyzeDirectory(watchingDir) {
     console.log(`Analyzing directory: ${watchingDir}`);
     let aggregatedResults = {};
 
@@ -219,22 +219,18 @@ export async function analyzeDirectory(watchingDir, language) {
         const fileContent = await readFile(filePath, 'utf8');
         const fileExtension = extname(filePath);
 
-        console.log(`Detecting classes and functions in: ${filePath}`);
         const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
 
-        console.log(`Analysis results for ${filePath}:`, analysisResults);
         aggregatedResults[filePath] = analysisResults;
     };
 
     const walkDirectory = async (dir) => {
-        console.log(`Walking directory: ${dir}`);
         const files = await readdir(dir);
 
         for (const file of files) {
             const filePath = join(dir, file);
             const stat = await _stat(filePath);
 
-            console.log('File stats:', { file, stat });
 
             if (stat.isDirectory()) {
                 await walkDirectory(filePath);
@@ -242,15 +238,12 @@ export async function analyzeDirectory(watchingDir, language) {
                 await analyzeFile(filePath);
             }
         }
-        console.log(`Finished walking directory: ${dir}`);
     };
 
     try {
         await walkDirectory(watchingDir);
-        console.log('Directory analysis complete.');
-        console.log('Resolving cross-file dependencies...');
         const finalResults = resolveCrossFileDependencies();
-        console.log('Analysis process complete. Returning results.');
+
         return finalResults;
     } catch (error) {
         console.error('Error during directory analysis:', error);

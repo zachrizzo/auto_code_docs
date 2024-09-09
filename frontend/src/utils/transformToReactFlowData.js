@@ -41,7 +41,8 @@ export async function transformToReactFlowData(parsedData) {
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
             const nodeLabel = declaration.name + (id.toLowerCase().includes('copy') ? ' (Duplicate)' : '');
-            nodes.push(createNode(id, nodeLabel));
+            const code = declaration.code || '';
+            nodes.push(createNode(id, nodeLabel, code));
             nodeSet.add(id);
         }
     }
@@ -98,12 +99,13 @@ export async function transformToReactFlowData(parsedData) {
 }
 
 // Helper functions
-function createNode(id, label) {
+function createNode(id, label, code) {
     const isDuplicate = id.toLowerCase().includes('copy');
     return {
         id,
         data: {
             label,
+            code,
             sourceHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-s-${suffix}` })),
             targetHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-t-${suffix}` })),
         },
