@@ -4,13 +4,7 @@ import BorderedTreeView from '../components/analyzer/TreeDocumentation.js';
 import CodeFlowChart from '../components/analyzer/mindMap/CodeMap.jsx';
 import { getAIDescription } from "../api/CodeDocumentation.js";
 
-// // Use the ipcRenderer exposed via preload script
 const { ipcRenderer } = window.electronAPI;
-
-// // Use fs and path methods exposed via preload script
-// const fs = window.electronAPI;
-// const path = window.electronAPI;
-
 
 const Analyzer = () => {
     const [language, setLanguage] = useState('javascript');

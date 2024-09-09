@@ -59,11 +59,26 @@ function CodeFlowChart({ data, onNodeClick }) {
     const generateFlowElements = useCallback(async () => {
         setIsLoading(true);
         try {
-            // You would replace this with actual logic to generate nodes/edges from data
-            const { nodes, edges } = { nodes: [], edges: [] }; // Example data, adjust accordingly
+            // Process your data prop here
+            const processedNodes = data.nodes.map(node => ({
+                id: node.id,
+                type: 'elk',
+                position: node.position || { x: 0, y: 0 },
+                data: { label: node.data.label, ...node.data }
+            }));
 
-            setNodes(nodes);
-            setEdges(edges);
+            const processedEdges = data.edges.map(edge => ({
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                type: 'custom',
+                animated: edge.animated,
+                style: edge.style,
+                data: edge.data
+            }));
+
+            setNodes(processedNodes);
+            setEdges(processedEdges);
         } catch (error) {
             console.error("Error generating flow elements:", error);
         }

@@ -4,6 +4,7 @@ const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs').promises;
 const { analyzeDirectory, initializeParser } = require('./utils/detector/detector.js');
+const { transformToReactFlowData } = require('./utils/transformToReactFlowData.js');
 
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -75,8 +76,9 @@ app.whenReady().then(() => {
     console.log('Main: analyze-directory invoked', { watchingDir, language });
     try {
       const results = await analyzeDirectory(watchingDir, language);
+      const elkResults = transformToReactFlowData(results);
       console.log('Analysis complete. Sending results back to renderer.');
-      return results;
+      return elkResults;
     } catch (error) {
       console.error('Error in analyze-directory handler:', error);
       throw error;
