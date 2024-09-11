@@ -5,11 +5,11 @@ class FunctionHandler {
 
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
+        const functionType = this.getFunctionType(node);
 
-        // Handle anonymous functions and name them later if needed
-        if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
+        if (functionName && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
-            const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
+            const id = this.astAnalyzer.addDeclaration(functionName, functionType, path, node.text);
 
             if (id) {
                 if (parentId) {
@@ -18,6 +18,9 @@ class FunctionHandler {
 
                 this.astAnalyzer.processedFunctions.add(functionName);
 
+                // Handle function body
+                this.traverseFunctionBody(node, path, id);
+
                 return id;
             }
         }
@@ -25,29 +28,51 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        let functionName = node.childForFieldName('name')?.text;
+        console.log(`Extracting function name from node type: ${node.type}`);
 
-        // Handle function names in short-form function definitions (assignment)
-        if (!functionName && (node.type === 'assignment' || node.type === 'function_definition')) {
-            const parent = node.parent;
-            if (parent.type === 'assignment') {
-                functionName = parent.childForFieldName('left')?.text;
+        if (node.type === 'function_definition') {
+            const signatureNode = node.namedChildren.find(child => child.type === 'signature');
+            if (signatureNode) {
+                const callExpressionNode = signatureNode.namedChildren.find(child => child.type === 'call_expression');
+                if (callExpressionNode) {
+                    const identifierNode = callExpressionNode.namedChildren.find(child => child.type === 'identifier');
+                    if (identifierNode) {
+                        return identifierNode.text;
+                    }
+                }
+            }
+        } else if (node.type === 'assignment') {
+            const leftSide = node.namedChildren[0]; // The left side of the assignment
+            if (leftSide.type === 'call_expression') {
+                // This is likely a short-form function definition
+                const identifierNode = leftSide.namedChildren.find(child => child.type === 'identifier');
+                if (identifierNode) {
+                    return identifierNode.text;
+                }
+            } else if (leftSide.type === 'identifier') {
+                // This is a regular assignment, which we'll treat as a function if the right side is a function
+                const rightSide = node.namedChildren[1];
+                if (rightSide && (rightSide.type === 'function_definition' || rightSide.type === 'lambda')) {
+                    return leftSide.text;
+                }
             }
         }
 
-        // Handle function names in macro definitions
-        if (!functionName && node.type === 'macro_definition') {
-            functionName = node.childForFieldName('name')?.text;
-        }
-
-        return functionName;
+        console.log('Function name not found');
+        return null;
     }
 
     getFunctionName(node) {
+        console.log(`Getting function name for node:`, JSON.stringify(node, null, 2));
+
         let name = this.extractFunctionName(node);
+        console.log(`Extracted name: ${name}`);
+
         if (!name) {
             name = this.getNameFromParent(node);
+            console.log(`Name from parent: ${name}`);
         }
+
         return name || 'anonymous';
     }
 
@@ -72,9 +97,17 @@ class FunctionHandler {
 
     getFunctionType(node) {
         if (node.type === 'function_definition') {
+            const signatureNode = node.childForFieldName('signature');
+            if (signatureNode && signatureNode.childForFieldName('where_clause')) {
+                return 'parametric_function';
+            }
             return 'function';
         }
         if (node.type === 'assignment') {
+            const rightSide = node.childForFieldName('right');
+            if (rightSide && rightSide.type === 'function_definition') {
+                return 'anonymous_function';
+            }
             return 'short_function';
         }
         if (node.type === 'macro_definition') {
@@ -95,7 +128,7 @@ class FunctionHandler {
     }
 
     traverseFunctionBody(node, path, functionId) {
-        const bodyNode = node.childForFieldName('body');
+        const bodyNode = node.childForFieldName('body') || node.childForFieldName('right');
         if (bodyNode) {
             const cursor = bodyNode.walk();
             if (cursor.gotoFirstChild()) {

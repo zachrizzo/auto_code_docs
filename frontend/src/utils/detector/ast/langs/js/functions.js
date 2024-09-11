@@ -6,7 +6,7 @@ class FunctionHandler {
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
 
-        // Handle anonymous functions and name them later if needed
+        //TODO handle anonymous functions and name them later
         if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
             const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
@@ -25,16 +25,16 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        let functionName = node.childForFieldName('id')?.text;
+        let functionName = node.childForFieldName('name')?.text;
 
-        if (!functionName && node.parent && node.parent.type === 'property') {
+        if (!functionName && node.parent && node.parent.type === 'pair') {
             functionName = node.parent.childForFieldName('key')?.text;
         }
 
-        if (!functionName && (node.type === 'function_expression' || node.type === 'arrow_function')) {
+        if (!functionName && (node.type === 'arrow_function_ex' || node.type === 'function')) {
             const parent = node.parent;
-            if (parent.type === 'variable_declaration' || parent.type === 'assignment_expression') {
-                functionName = parent.childForFieldName('id')?.text;
+            if (parent.type === 'variable_declarator' || parent.type === 'type_annotation') {
+                functionName = parent.childForFieldName('name')?.text;
             }
         }
 
@@ -52,11 +52,11 @@ class FunctionHandler {
     getNameFromParent(node) {
         const parent = node.parent;
         if (parent) {
-            if (parent.type === 'property') {
+            if (parent.type === 'pair') {
                 return parent.childForFieldName('key')?.text;
             }
-            if (['variable_declaration', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
+            if (['variable_declarator', 'type_annotation'].includes(parent.type)) {
+                return parent.childForFieldName('name')?.text;
             }
         }
         return null;
