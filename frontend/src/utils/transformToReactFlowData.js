@@ -93,7 +93,6 @@ export async function transformToReactFlowData(parsedData) {
         position: getNodePosition(layoutedGraph, node.id),
     }));
 
-    console.log('Layouted Nodes:', layoutedNodes);
 
     return { nodes: layoutedNodes, edges };
 }

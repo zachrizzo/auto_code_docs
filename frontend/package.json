@@ -84,6 +84,7 @@
     "react-syntax-highlighter": "^15.5.0",
     "reactflow": "^11.11.4",
     "stream-browserify": "^3.0.0",
+    "tree-sitter-julia": "^0.23.0",
     "util": "^0.12.5",
     "web-tree-sitter": "^0.23.0"
   }

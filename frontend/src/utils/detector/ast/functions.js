@@ -5,6 +5,7 @@ class FunctionHandler {
 
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
+
         //TODO handle anonymous functions and name them later
         if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;

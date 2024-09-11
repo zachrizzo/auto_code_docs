@@ -16,9 +16,10 @@ const languageExtensions = {
     '.js': 'javascript',
     '.jsx': 'javascript',
     '.py': 'python',
+    '.jl': 'julia',  // Added Julia extension
 };
 
-// Initialize the parsers for JavaScript and Python
+// Initialize the parsers for JavaScript, Python, and Julia
 export async function initializeParser() {
     // Initialize the WebAssembly for Tree-sitter
     await Parser.init();
@@ -26,18 +27,20 @@ export async function initializeParser() {
     // Create a new parser instance
     const parser = new Parser();
 
-    // Load the WebAssembly files correctly
+    // Load the WebAssembly files correctly for each language
     const JavaScript = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-javascript.wasm'));
     const Python = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-python.wasm'));
+    const Julia = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-julia.wasm'));  // Added Julia
 
     // Set the language for the parser
-    parser.setLanguage(JavaScript);  // You can change this dynamically as needed
+    parser.setLanguage(JavaScript);  // Default language can be changed dynamically
 
     // Return an object with the parser configurations
     parsers = {
         main: parser,
         javascript: JavaScript,
-        python: Python
+        python: Python,
+        julia: Julia  // Added Julia parser
     };
 
     return parsers;
@@ -54,8 +57,9 @@ export function resolveIdConflict(id) {
     return newId;
 }
 
+// Use languageExtensions for file extension to language mapping
 export function detectLanguageFromFileName(fileName) {
-    const extension = fileName.slice(fileName.lastIndexOf('.'));
+    const extension = extname(fileName);  // Use extname for consistency
     return languageExtensions[extension] || null;
 }
 
@@ -153,14 +157,9 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
     }
 }
 
+// Use languageExtensions as the source of truth for extension-to-language mapping
 export function detectLanguageFromExtension(extension) {
-    const languageMap = {
-        '.js': 'javascript',
-        '.jsx': 'javascript',
-        '.py': 'python',
-    };
-
-    return languageMap[extension] || null;
+    return languageExtensions[extension] || null;
 }
 
 export function resolveCrossFileDependencies() {
@@ -203,9 +202,9 @@ export function resolveCrossFileDependencies() {
         }
     }
 
-    console.log("Cross-file dependencies resolved.");
-    console.log("Updated globalResults:", globalResults);
-    console.log('globalFunctionNameToId', globalFunctionNameToId);
+    // console.log("Cross-file dependencies resolved.");
+    // console.log("Updated globalResults:", globalResults);
+    // console.log('globalFunctionNameToId', globalFunctionNameToId);
 
     return globalResults;
 }
@@ -251,8 +250,7 @@ export async function analyzeDirectory(watchingDir) {
 
             if (stat.isDirectory()) {
                 await walkDirectory(filePath);
-            } else if ((file.endsWith('.js') || file.endsWith('.py') || file.endsWith('.jsx')) && !ig.ignores(relative(watchingDir, filePath))) {
-
+            } else if (languageExtensions[extname(file)] && !ig.ignores(relative(watchingDir, filePath))) {
                 await analyzeFile(filePath);
             }
         }

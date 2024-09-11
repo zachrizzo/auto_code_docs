@@ -92,7 +92,42 @@ const langs = {
             'while',    // While loop
         ]
     },
-
+    julia: {
+        functions: [
+            'function_definition',   // Function definitions
+            'assignment',            // Short-form function definitions
+        ],
+        classes: [
+            'struct_definition',     // Struct definitions
+            'abstract_definition',   // Abstract type definitions
+            'primitive_definition',  // Primitive type definitions
+        ],
+        call: [
+            'call_expression',       // Function calls
+        ],
+        other: [
+            'module_definition',     // Module definitions
+            'macro_definition',      // Macro definitions
+            'return_statement',      // Return statements
+            'where_expression',      // Where clauses
+            'where_clause',          // Where clauses in function signatures
+            'binary_expression',     // Binary operations
+            'unary_typed_expression', // Type annotations
+            'typed_expression',      // Type annotations
+            'field_expression',      // Accessing fields (e.g., object.field)
+            'string_literal',        // String literals
+            'integer_literal',       // Integer literals
+            'identifier',            // Variable and function names
+            'operator',              // Operators
+            'argument_list',         // Function arguments
+            'signature',             // Function signatures
+            'type_clause',           // Type clauses (e.g., <:)
+            'type_parameter_list',   // Type parameters
+            'parametrized_type_expression', // Parameterized types
+            'splat_expression',      // Splat expressions (...)
+            'tuple_expression',      // Tuple expressions
+        ]
+    },
 }
 
 class ASTDetectionHandler {
@@ -242,6 +277,7 @@ class ASTDetectionHandler {
             if (!node) return;
 
             const nodeType = node.type;
+            console.log('type', nodeType)
             const nodeCode = node.text;
 
             const currentNodeId = this.getUniqueId(nodeCode);
@@ -303,7 +339,7 @@ class ASTDetectionHandler {
                     if (objectName && propertyName) {
                         return `${objectName}.${propertyName}`;
                     }
-                } else if (functionNode.type === 'function') {
+                } else if (functionNode.type.includes('function')) {
                     // Handle anonymous function calls
                     return 'anonymous';
                 }
