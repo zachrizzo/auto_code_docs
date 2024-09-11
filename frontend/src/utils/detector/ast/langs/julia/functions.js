@@ -25,17 +25,19 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        let functionName = node.childForFieldName('id')?.text;
+        let functionName = node.childForFieldName('name')?.text;
 
-        if (!functionName && node.parent && node.parent.type === 'property') {
-            functionName = node.parent.childForFieldName('key')?.text;
+        // Handle function names in short-form function definitions (assignment)
+        if (!functionName && (node.type === 'assignment' || node.type === 'function_definition')) {
+            const parent = node.parent;
+            if (parent.type === 'assignment') {
+                functionName = parent.childForFieldName('left')?.text;
+            }
         }
 
-        if (!functionName && (node.type === 'function_expression' || node.type === 'arrow_function')) {
-            const parent = node.parent;
-            if (parent.type === 'variable_declaration' || parent.type === 'assignment_expression') {
-                functionName = parent.childForFieldName('id')?.text;
-            }
+        // Handle function names in macro definitions
+        if (!functionName && node.type === 'macro_definition') {
+            functionName = node.childForFieldName('name')?.text;
         }
 
         return functionName;
@@ -52,11 +54,11 @@ class FunctionHandler {
     getNameFromParent(node) {
         const parent = node.parent;
         if (parent) {
-            if (parent.type === 'property') {
-                return parent.childForFieldName('key')?.text;
+            if (parent.type === 'assignment') {
+                return parent.childForFieldName('left')?.text;
             }
-            if (['variable_declaration', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
+            if (parent.type === 'macro_definition') {
+                return parent.childForFieldName('name')?.text;
             }
         }
         return null;
@@ -69,7 +71,16 @@ class FunctionHandler {
     }
 
     getFunctionType(node) {
-        return node.type === 'method_definition' ? 'method' : 'function';
+        if (node.type === 'function_definition') {
+            return 'function';
+        }
+        if (node.type === 'assignment') {
+            return 'short_function';
+        }
+        if (node.type === 'macro_definition') {
+            return 'macro';
+        }
+        return 'function';
     }
 
     addFunctionRelationship(id, parentId) {

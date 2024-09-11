@@ -2,7 +2,11 @@
 
 import { createHash } from 'crypto';
 import { relative, isAbsolute } from 'path';
-import FunctionHandler from './functions';
+import JavaScriptFunctionHandler from './langs/js/functions';
+import PythonFunctionHandler from './langs/python/functions';
+import JuliaFunctionHandler from './langs/julia/functions';
+import JavaFunctionHandler from './langs/java/functions';
+
 import ClassHandler from './classes';
 
 
@@ -151,8 +155,9 @@ class ASTDetectionHandler {
 
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
 
-        this.functionHandler = new FunctionHandler(this);
+        this.functionHandler = this.createFunctionHandler(language)
         this.classHandler = new ClassHandler(this);
+
 
         // Retrieve node types from the language configuration
         this.functionTypes = langs[language]?.functions || [];
@@ -169,6 +174,21 @@ class ASTDetectionHandler {
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
         this.results.allDeclarations = this.results.allDeclarations || {};
         this.results.allCalledFunctions = this.results.allCalledFunctions || {};
+    }
+
+    createFunctionHandler(language) {
+        switch (language) {
+            case 'javascript':
+                return new JavaScriptFunctionHandler(this);
+            case 'julia':
+                return new JuliaFunctionHandler(this);
+            case 'java':
+                return new JavaFunctionHandler(this);
+            case 'python':
+                return new PythonFunctionHandler(this);
+            default:
+                return new JavaScriptFunctionHandler(this); // Default handler
+        }
     }
 
     isInWatchedDir(filePath) {

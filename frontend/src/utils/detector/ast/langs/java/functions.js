@@ -6,7 +6,7 @@ class FunctionHandler {
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
 
-        // Handle anonymous functions and name them later if needed
+        // Handle anonymous methods/functions and name them later if needed
         if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
             const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
@@ -25,16 +25,18 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        let functionName = node.childForFieldName('id')?.text;
+        let functionName = node.childForFieldName('name')?.text;
 
-        if (!functionName && node.parent && node.parent.type === 'property') {
-            functionName = node.parent.childForFieldName('key')?.text;
+        // Handle constructors
+        if (!functionName && node.type === 'constructor_declaration') {
+            functionName = node.parent.childForFieldName('name')?.text;
         }
 
-        if (!functionName && (node.type === 'function_expression' || node.type === 'arrow_function')) {
+        // Handle methods assigned to variables or fields
+        if (!functionName && node.type === 'method_declaration') {
             const parent = node.parent;
-            if (parent.type === 'variable_declaration' || parent.type === 'assignment_expression') {
-                functionName = parent.childForFieldName('id')?.text;
+            if (parent.type === 'variable_declarator') {
+                functionName = parent.childForFieldName('name')?.text;
             }
         }
 
@@ -52,11 +54,8 @@ class FunctionHandler {
     getNameFromParent(node) {
         const parent = node.parent;
         if (parent) {
-            if (parent.type === 'property') {
-                return parent.childForFieldName('key')?.text;
-            }
-            if (['variable_declaration', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
+            if (parent.type === 'variable_declarator') {
+                return parent.childForFieldName('name')?.text;
             }
         }
         return null;
@@ -69,7 +68,13 @@ class FunctionHandler {
     }
 
     getFunctionType(node) {
-        return node.type === 'method_definition' ? 'method' : 'function';
+        if (node.type === 'method_declaration') {
+            return 'method';
+        }
+        if (node.type === 'constructor_declaration') {
+            return 'constructor';
+        }
+        return 'function';
     }
 
     addFunctionRelationship(id, parentId) {

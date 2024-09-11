@@ -24,16 +24,11 @@ class ClassHandler {
     }
 
     extractClassName(node) {
-        let className = node.childForFieldName('id')?.text;
+        let className = node.childForFieldName('name')?.text;
 
         // Handle anonymous classes assigned to a variable
-        if (!className && node.parent && (node.parent.type === 'variable_declarator' || node.parent.type === 'assignment_expression')) {
-            className = node.parent.childForFieldName('id')?.text;
-        }
-
-        // Handle classes within object literals or as object properties
-        if (!className && node.parent && node.parent.type === 'property') {
-            className = node.parent.childForFieldName('key')?.text;
+        if (!className && node.parent && node.parent.type === 'assignment') {
+            className = node.parent.childForFieldName('left')?.text;
         }
 
         return className || 'anonymous';
@@ -49,13 +44,8 @@ class ClassHandler {
 
     getNameFromParent(node) {
         const parent = node.parent;
-        if (parent) {
-            if (parent.type === 'property') {
-                return parent.childForFieldName('key')?.text;
-            }
-            if (['variable_declarator', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
-            }
+        if (parent && parent.type === 'assignment') {
+            return parent.childForFieldName('left')?.text;
         }
         return null;
     }
@@ -67,7 +57,7 @@ class ClassHandler {
     }
 
     getClassType(node) {
-        return node.type === 'class_declaration' || node.type === 'class_expression' ? 'class' : 'unknown';
+        return node.type === 'class_definition' ? 'class' : 'unknown';
     }
 
     addClassRelationship(id, parentId) {

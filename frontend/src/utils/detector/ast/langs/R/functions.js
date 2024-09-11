@@ -25,16 +25,16 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        let functionName = node.childForFieldName('id')?.text;
+        let functionName = node.childForFieldName('name')?.text;
 
-        if (!functionName && node.parent && node.parent.type === 'property') {
+        if (!functionName && node.parent && node.parent.type === 'pair') {
             functionName = node.parent.childForFieldName('key')?.text;
         }
 
-        if (!functionName && (node.type === 'function_expression' || node.type === 'arrow_function')) {
+        if (!functionName && node.type === 'function') {
             const parent = node.parent;
-            if (parent.type === 'variable_declaration' || parent.type === 'assignment_expression') {
-                functionName = parent.childForFieldName('id')?.text;
+            if (parent.type === 'assignment' || parent.type === 'variable_assignment') {
+                functionName = parent.childForFieldName('name')?.text;
             }
         }
 
@@ -52,11 +52,11 @@ class FunctionHandler {
     getNameFromParent(node) {
         const parent = node.parent;
         if (parent) {
-            if (parent.type === 'property') {
+            if (parent.type === 'pair') {
                 return parent.childForFieldName('key')?.text;
             }
-            if (['variable_declaration', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
+            if (parent.type === 'assignment' || parent.type === 'variable_assignment') {
+                return parent.childForFieldName('name')?.text;
             }
         }
         return null;
@@ -69,7 +69,7 @@ class FunctionHandler {
     }
 
     getFunctionType(node) {
-        return node.type === 'method_definition' ? 'method' : 'function';
+        return node.type === 'function_definition' ? 'function' : 'anonymous_function';
     }
 
     addFunctionRelationship(id, parentId) {

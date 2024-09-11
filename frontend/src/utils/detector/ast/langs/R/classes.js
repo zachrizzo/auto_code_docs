@@ -24,16 +24,27 @@ class ClassHandler {
     }
 
     extractClassName(node) {
-        let className = node.childForFieldName('id')?.text;
+        let className = null;
 
-        // Handle anonymous classes assigned to a variable
-        if (!className && node.parent && (node.parent.type === 'variable_declarator' || node.parent.type === 'assignment_expression')) {
-            className = node.parent.childForFieldName('id')?.text;
+        // Handle S3 classes defined by the 'class' attribute
+        if (node.type === 'function_call' && node.text.includes('class')) {
+            className = node.parent?.childForFieldName('left')?.text || null;
         }
 
-        // Handle classes within object literals or as object properties
-        if (!className && node.parent && node.parent.type === 'property') {
-            className = node.parent.childForFieldName('key')?.text;
+        // Handle S4 classes defined by setClass
+        if (node.type === 'function_call' && node.text.includes('setClass')) {
+            const classArgNode = node.childForFieldName('arguments')?.child(0);
+            if (classArgNode) {
+                className = classArgNode.text;
+            }
+        }
+
+        // Handle R6 classes defined by R6Class
+        if (node.type === 'function_call' && node.text.includes('R6Class')) {
+            const classArgNode = node.childForFieldName('arguments')?.child(0);
+            if (classArgNode) {
+                className = classArgNode.text;
+            }
         }
 
         return className || 'anonymous';
@@ -49,13 +60,8 @@ class ClassHandler {
 
     getNameFromParent(node) {
         const parent = node.parent;
-        if (parent) {
-            if (parent.type === 'property') {
-                return parent.childForFieldName('key')?.text;
-            }
-            if (['variable_declarator', 'assignment_expression'].includes(parent.type)) {
-                return parent.childForFieldName('id')?.text;
-            }
+        if (parent && parent.type === 'assignment') {
+            return parent.childForFieldName('left')?.text;
         }
         return null;
     }
@@ -67,7 +73,14 @@ class ClassHandler {
     }
 
     getClassType(node) {
-        return node.type === 'class_declaration' || node.type === 'class_expression' ? 'class' : 'unknown';
+        if (node.type === 'function_call' && node.text.includes('setClass')) {
+            return 'S4_class';
+        } else if (node.type === 'function_call' && node.text.includes('R6Class')) {
+            return 'R6_class';
+        } else if (node.type === 'function_call' && node.text.includes('class')) {
+            return 'S3_class';
+        }
+        return 'unknown';
     }
 
     addClassRelationship(id, parentId) {
