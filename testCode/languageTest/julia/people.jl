@@ -19,3 +19,6 @@ function create_family_member(name::String, age::Int, relation::String)
     person = create_person(name, age)
     create_relative(person, relation)  # This function is in family.jl
 end
+function test()
+    println("Family Tree:")
+end

@@ -24,4 +24,6 @@ function display_family_tree(name::String, age::Int, relation::String)
     display_family_member(family_member)
 end
 
-
+function test()
+    println("Family Tree:")
+end

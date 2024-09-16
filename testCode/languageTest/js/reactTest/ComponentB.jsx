@@ -8,7 +8,9 @@ const ComponentB = () => {
     const handleComplexFunction = () => {
         complexFunction(); // Call a function from helper.js
     };
-
+    const logHelper = () => {
+        console.log('Component A rendered');
+    }
     return (
         <div>
             <h2>Component B</h2>

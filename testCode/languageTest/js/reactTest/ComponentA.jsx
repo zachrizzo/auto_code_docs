@@ -24,6 +24,10 @@ const ComponentA = () => {
         doubleIncrement();
     };
 
+    const logHelper = () => {
+        console.log('Component A rendered');
+    }
+
     return (
         <div>
             <h1>Count: {count}</h1>
