@@ -49,12 +49,20 @@ class FunctionHandler {
                 if (identifierNode) {
                     return identifierNode.text;
                 }
+                else {
+                    console.log(`Unhandled assignment type: ${leftSide.type}`);
+                }
             } else if (leftSide.type === 'identifier') {
                 // This is a regular assignment, which we'll treat as a function if the right side is a function
-                const rightSide = node.namedChildren[1];
+                const rightSide = node.namedChildren[2];
                 if (rightSide && (rightSide.type === 'function_definition' || rightSide.type === 'lambda')) {
                     return leftSide.text;
                 }
+                else {
+                    console.log(`Unhandled assignment type: ${leftSide.type}`);
+                }
+            } else {
+                console.log(`Unhandled assignment type: ${leftSide.type}`);
             }
         }
 
@@ -140,6 +148,38 @@ class FunctionHandler {
                 } while (cursor.gotoNextSibling());
             }
         }
+    }
+
+    getCalledFunctionName(node) {
+        if (this.astAnalyzer.isCalledNode(node.type)) {
+            const firstChild = node.namedChildren[0];
+            if (firstChild) {
+                if (firstChild.type === 'identifier') {
+                    // Simple function call
+                    return firstChild.text;
+                } else if (firstChild.type === 'field_expression') {
+                    // Method call or namespaced function call
+                    const objectName = firstChild.namedChildren[0]?.text;
+                    const methodName = firstChild.namedChildren[1]?.text;
+                    if (objectName && methodName) {
+                        return `${objectName}.${methodName}`;
+                    }
+                } else if (firstChild.type.includes('function')) {
+                    // Anonymous function call
+                    return 'anonymous';
+                }
+            }
+
+            // If we couldn't identify the function name from the first child,
+            // try to find an identifier among the node's children
+            for (let i = 0; i < node.namedChildCount; i++) {
+                let child = node.namedChild(i);
+                if (child.type === 'identifier') {
+                    return child.text;
+                }
+            }
+        }
+        return null;
     }
 }
 

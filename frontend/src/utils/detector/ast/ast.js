@@ -346,21 +346,20 @@ class ASTDetectionHandler {
 
     getCalledFunctionName(node) {
         if (this.isCalledNode(node.type)) {
-            let functionNode = node.child(0);
-
-            // Handle different node structures
-            if (functionNode) {
-                if (functionNode.type === 'identifier') {
-                    return functionNode.text;
-                } else if (['member_expression', 'attribute', 'field_expression'].includes(functionNode.type)) {
-                    // Handle object method calls (e.g., object.method())
-                    let objectName = functionNode.child(0)?.text;
-                    let propertyName = functionNode.child(1)?.text;
-                    if (objectName && propertyName) {
-                        return `${objectName}.${propertyName}`;
+            const firstChild = node.namedChildren[0];
+            if (firstChild) {
+                if (firstChild.type === 'identifier') {
+                    // Simple function call
+                    return firstChild.text;
+                } else if (firstChild.type === 'field_expression') {
+                    // Method call or namespaced function call
+                    const objectName = firstChild.namedChildren[0]?.text;
+                    const methodName = firstChild.namedChildren[1]?.text;
+                    if (objectName && methodName) {
+                        return `${objectName}.${methodName}`;
                     }
-                } else if (functionNode.type.includes('function')) {
-                    // Handle anonymous function calls
+                } else if (firstChild.type.includes('function')) {
+                    // Anonymous function call
                     return 'anonymous';
                 }
             }

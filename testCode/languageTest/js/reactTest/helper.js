@@ -16,10 +16,11 @@ export const complexFunction = () => {
     }
 
     const innerArrowFunction = () => {
+        innerFunction();
         console.log('Inner arrow function inside complex function');
     };
 
-    innerFunction();
+
     innerArrowFunction();
 };
 
