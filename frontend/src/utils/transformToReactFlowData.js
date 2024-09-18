@@ -1,4 +1,3 @@
-// transformToReactFlow.js
 import ELK from 'elkjs/lib/elk.bundled.js';
 
 const elk = new ELK();
@@ -16,87 +15,128 @@ const layoutOptions = {
     'elk.layered.layering.strategy': 'LONGEST_PATH',
 };
 
-export async function transformToReactFlowData(parsedData) {
-    const nodes = [];
-    const edges = [];
-    const nodeSet = new Set();
+function getFileName(path) {
+    return path.split('/').pop();
+}
 
-    // Validating parsedData
+export async function transformToReactFlowData(parsedData, maxNodes = 1000, maxEdges = 5000, progressCallback) {
     if (!parsedData || typeof parsedData !== 'object' || Object.keys(parsedData).length === 0) {
         console.error('Invalid or empty parsed data:', parsedData);
-        return { nodes, edges };
+        return { nodes: [], edges: [] };
     }
 
-    const getFileName = (path) => {
-        const parts = path.split('/');
-        return parts[parts.length - 1];
-    };
+    const nodeSet = new Set();
+    const nodeMap = new Map();
+    const nodes = [];
+    const edges = [];
+    const queue = Object.entries(parsedData);
+    const chunkSize = 100;
 
-    // Node creation
-    for (const [fileName, fileData] of Object.entries(parsedData)) {
-        const fileNodeId = `file-${getFileName(fileName)}`;
-        nodes.push(createNode(fileNodeId, getFileName(fileName)));
-        nodeSet.add(fileNodeId);
+    while (queue.length > 0 && nodes.length < maxNodes && edges.length < maxEdges) {
+        const chunk = queue.splice(0, chunkSize);
+        await processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, maxEdges);
+        await new Promise(resolve => setTimeout(resolve, 0));
 
-        const allDeclarations = fileData.allDeclarations || {};
-        for (const [id, declaration] of Object.entries(allDeclarations)) {
-            const nodeLabel = declaration.name;
-            const code = declaration.code || '';
-            nodes.push(createNode(id, nodeLabel, code));
-            nodeSet.add(id);
+        if (progressCallback) {
+            progressCallback({
+                phase: 'processing',
+                nodesProcessed: nodes.length,
+                edgesProcessed: edges.length
+            });
         }
     }
 
-    // Edge creation
-    for (const [fileName, fileData] of Object.entries(parsedData)) {
-        const fileNodeId = `file-${getFileName(fileName)}`;
-        (fileData.rootFunctionIds || []).forEach(id =>
-            safeAddEdge(fileNodeId, id, { type: 'declaration' }, edges, nodeSet));
+    console.log(`Processed ${nodes.length} nodes and ${edges.length} edges`);
 
-        for (const [sourceId, targetIds] of Object.entries(fileData.directRelationships || {})) {
-            if (Array.isArray(targetIds)) {
-                targetIds.forEach(targetId =>
-                    safeAddEdge(sourceId, targetId, { type: 'declaration' }, edges, nodeSet));
-            }
-        }
+    // Process in smaller batches for layout
+    const batchSize = 200;
+    const layoutedNodes = [];
+    let batchCount = 0;
 
-        const functionCallRelationships = fileData.functionCallRelationships || {};
-        for (const [callerFunctionId, calledFunctionIds] of Object.entries(functionCallRelationships)) {
-            if (Array.isArray(calledFunctionIds)) {
-                calledFunctionIds.forEach(calledFunctionId => {
-                    if (functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)) {
-                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'codependent' }, edges, nodeSet);
-                    } else {
-                        safeAddEdge(callerFunctionId, calledFunctionId, { type: 'call' }, edges, nodeSet);
-                    }
-                });
-            }
-        }
-    }
+    for (let i = 0; i < nodes.length; i += batchSize) {
+        const nodeBatch = nodes.slice(i, i + batchSize);
+        const edgeBatch = edges.filter(e =>
+            nodeBatch.some(n => n.id === e.source) && nodeBatch.some(n => n.id === e.target)
+        );
 
-    // Cross-file relationships
-    for (const [fileName, fileData] of Object.entries(parsedData)) {
-        for (const [sourceId, relationships] of Object.entries(fileData.crossFileRelationships || {})) {
-            if (Array.isArray(relationships)) {
-                relationships.forEach(targetId => {
-                    safeAddEdge(sourceId, targetId, { type: 'crossFileCall' }, edges, nodeSet);
-                });
-            }
+        console.log(`Laying out batch ${++batchCount}: ${nodeBatch.length} nodes, ${edgeBatch.length} edges`);
+
+        const graph = createElkGraph(nodeBatch, edgeBatch);
+        const layoutedGraph = await elk.layout(graph);
+        layoutedNodes.push(...applyLayout(nodeBatch, layoutedGraph));
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        if (progressCallback) {
+            progressCallback({
+                phase: 'layout',
+                nodesLayouted: layoutedNodes.length,
+                totalNodes: nodes.length
+            });
         }
     }
 
-    const graph = createElkGraph(nodes, edges);
-    const layoutedGraph = await elk.layout(graph);
-
-    const layoutedNodes = nodes.map(node => ({
-        ...node,
-        position: getNodePosition(layoutedGraph, node.id),
-    }));
-
+    console.log(`Layout complete for ${layoutedNodes.length} nodes`);
     return { nodes: layoutedNodes, edges };
 }
 
-// Helper functions
+async function processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, maxEdges) {
+    for (const [fileName, fileData] of chunk) {
+        if (nodes.length >= maxNodes || edges.length >= maxEdges) break;
+
+        const fileNodeId = `file-${getFileName(fileName)}`;
+        if (!nodeSet.has(fileNodeId)) {
+            nodes.push(createNode(fileNodeId, getFileName(fileName)));
+            nodeSet.add(fileNodeId);
+            nodeMap.set(fileNodeId, nodes.length - 1);
+        }
+
+        for (const [id, declaration] of Object.entries(fileData.allDeclarations || {})) {
+            if (nodes.length >= maxNodes) break;
+            if (!nodeSet.has(id)) {
+                nodes.push(createNode(id, declaration.name, declaration.code || ''));
+                nodeSet.add(id);
+                nodeMap.set(id, nodes.length - 1);
+            }
+        }
+
+        processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges);
+    }
+}
+
+function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
+    const addEdge = (source, target, type) => {
+        if (edges.length < maxEdges && nodeSet.has(source) && nodeSet.has(target)) {
+            safeAddEdge(source, target, { type }, edges, nodeSet);
+        }
+    };
+
+    (fileData.rootFunctionIds || []).forEach(id => addEdge(fileNodeId, id, 'declaration'));
+
+    Object.entries(fileData.directRelationships || {}).forEach(([sourceId, targetIds]) => {
+        if (Array.isArray(targetIds)) {
+            targetIds.forEach(targetId => addEdge(sourceId, targetId, 'declaration'));
+        }
+    });
+
+    Object.entries(fileData.functionCallRelationships || {}).forEach(([callerFunctionId, calledFunctionIds]) => {
+        if (Array.isArray(calledFunctionIds)) {
+            calledFunctionIds.forEach(calledFunctionId => {
+                const type = fileData.functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)
+                    ? 'codependent'
+                    : 'call';
+                addEdge(callerFunctionId, calledFunctionId, type);
+            });
+        }
+    });
+
+    Object.entries(fileData.crossFileRelationships || {}).forEach(([sourceId, relationships]) => {
+        if (Array.isArray(relationships)) {
+            relationships.forEach(targetId => addEdge(sourceId, targetId, 'crossFileCall'));
+        }
+    });
+}
+
 function createNode(id, label, code) {
     const isDuplicate = /\(\d+\)$/.test(label); // Check if label ends with (number)
     return {
@@ -141,6 +181,13 @@ function safeAddEdge(sourceId, targetId, options, edges, nodeSet) {
     }
 }
 
+function applyLayout(nodes, layoutedGraph) {
+    return nodes.map((node, index) => ({
+        ...node,
+        position: getNodePosition(layoutedGraph, node.id, index),
+    }));
+}
+
 function getEdgeColor(type) {
     switch (type) {
         case 'call': return '#FFFF00';
@@ -172,7 +219,7 @@ function createElkGraph(nodes, edges) {
     };
 }
 
-function getNodePosition(layoutedGraph, nodeId) {
-    const layoutedNode = layoutedGraph.children.find(n => n.id === nodeId);
+function getNodePosition(layoutedGraph, nodeId, index) {
+    const layoutedNode = layoutedGraph.children[index];
     return layoutedNode ? { x: layoutedNode.x, y: layoutedNode.y } : { x: 0, y: 0 };
 }

@@ -238,31 +238,57 @@ export async function analyzeDirectory(watchingDir) {
     console.log(`Analyzing directory: ${watchingDir}`);
     let aggregatedResults = {};
     const ig = await loadIgnorePatterns(watchingDir);
+    const MAX_DEPTH = 10;
+    const BATCH_SIZE = 100;
 
     const analyzeFile = async (filePath) => {
         console.log(`Reading file: ${filePath}`);
         const fileContent = await readFile(filePath, 'utf8');
         const fileExtension = extname(filePath);
-        const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
-        aggregatedResults[filePath] = analysisResults;
+
+        return new Promise((resolve) => {
+            setImmediate(async () => {
+                const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
+                aggregatedResults[filePath] = analysisResults;
+                resolve();
+            });
+        });
     };
 
-    const walkDirectory = async (dir) => {
-        const files = await readdir(dir);
-        for (const file of files) {
-            const filePath = join(dir, file);
-            const stat = await _stat(filePath);
+    const filesToAnalyze = [];
 
-            if (stat.isDirectory()) {
-                await walkDirectory(filePath);
-            } else if (languageExtensions[extname(file)] && !ig.ignores(relative(watchingDir, filePath))) {
-                await analyzeFile(filePath);
+    const walkDirectoryIteratively = async (dir, currentDepth = 0) => {
+        if (currentDepth >= MAX_DEPTH) {
+            console.warn(`Maximum depth reached at ${dir}. Skipping deeper directories.`);
+            return;
+        }
+
+        const directoriesToProcess = [[dir, currentDepth]];
+
+        while (directoriesToProcess.length > 0) {
+            const [currentDir, depth] = directoriesToProcess.pop();
+            const files = await readdir(currentDir);
+            for (const file of files) {
+                const filePath = join(currentDir, file);
+                const stat = await _stat(filePath);
+
+                if (stat.isDirectory() && depth < MAX_DEPTH) {
+                    directoriesToProcess.push([filePath, depth + 1]);
+                } else if (languageExtensions[extname(file)] && !ig.ignores(relative(watchingDir, filePath))) {
+                    filesToAnalyze.push(filePath);
+                }
             }
         }
     };
 
     try {
-        await walkDirectory(watchingDir);
+        await walkDirectoryIteratively(watchingDir);
+
+        for (let i = 0; i < filesToAnalyze.length; i += BATCH_SIZE) {
+            const batch = filesToAnalyze.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(filePath => analyzeFile(filePath)));
+        }
+
         const finalResults = resolveCrossFileDependencies();
         return finalResults;
     } catch (error) {
