@@ -15,7 +15,6 @@ const langs = {
             'function_definition',
             'lambda',
             'async_function_definition',
-            'function'
         ],
         classes: [
             'class_definition'
@@ -37,7 +36,7 @@ const langs = {
             'function_expression',
             'arrow_function',
             'method_definition',
-            'function'
+            // Removed 'function' from the list to prevent misinterpretation
         ],
         classes: [
             'class_declaration',
@@ -59,7 +58,6 @@ const langs = {
         functions: [
             'method_declaration',
             'constructor_declaration',
-            'function'
         ],
         classes: [
             'class_declaration',
@@ -78,7 +76,6 @@ const langs = {
         functions: [
             'method',
             'lambda',
-            'function'
         ],
         classes: [
             'class',

@@ -1,5 +1,6 @@
-// jsfunctions.js
-class FunctionHandler {
+// langs/js/functions.js
+
+class JavaScriptFunctionHandler {
     constructor(astAnalyzer) {
         this.astAnalyzer = astAnalyzer;
     }
@@ -55,7 +56,7 @@ class FunctionHandler {
         if (!name) {
             name = this.getNameFromParent(node);
         }
-        return name || 'anonymous';
+        return name || null; // Changed 'anonymous' to null
     }
 
     getNameFromParent(node) {
@@ -106,7 +107,10 @@ class FunctionHandler {
                     } else {
                         // Recursively traverse other nodes
                         if (childNode.namedChildCount > 0) {
-                            this.traverseFunctionBody(childNode, path, functionId);
+                            // Ensure we are not traversing tokens or keywords
+                            if (!['identifier', 'string', 'number', 'keyword'].includes(childNode.type)) {
+                                this.traverseFunctionBody(childNode, path, functionId);
+                            }
                         }
                     }
                 } while (cursor.gotoNextSibling());
@@ -115,4 +119,4 @@ class FunctionHandler {
     }
 }
 
-export default FunctionHandler;
+export default JavaScriptFunctionHandler;
