@@ -1,14 +1,17 @@
-class ClassHandler {
+// langs/julia/classes.js
+
+class JuliaClassHandler {
     constructor(astAnalyzer) {
         this.astAnalyzer = astAnalyzer;
     }
 
     handleNode(node, parentPath, parentId) {
         const className = this.getClassName(node);
+        const classType = this.getClassType(node);
 
         if (className && this.shouldProcessClass(className)) {
             const path = `${parentPath}${className}`;
-            const id = this.astAnalyzer.addDeclaration(className, this.getClassType(node), path, node.text);
+            const id = this.astAnalyzer.addDeclaration(className, classType, path, node.text);
 
             if (id) {
                 if (parentId) {
@@ -16,6 +19,9 @@ class ClassHandler {
                 }
 
                 this.astAnalyzer.processedClasses.add(className);
+
+                // Traverse the class body to detect nested types and functions
+                this.traverseClassBody(node, path, id);
 
                 return id;
             }
@@ -31,7 +37,7 @@ class ClassHandler {
             className = node.parent.childForFieldName('left')?.text;
         }
 
-        return className || 'anonymous';
+        return className || null;
     }
 
     getClassName(node) {
@@ -39,13 +45,16 @@ class ClassHandler {
         if (!name) {
             name = this.getNameFromParent(node);
         }
-        return name || 'anonymous';
+        return name || null;
     }
 
     getNameFromParent(node) {
         const parent = node.parent;
         if (parent && parent.type === 'assignment') {
-            return parent.childForFieldName('left')?.text;
+            const leftSide = parent.childForFieldName('left');
+            if (leftSide && leftSide.type === 'identifier') {
+                return leftSide.text;
+            }
         }
         return null;
     }
@@ -63,6 +72,8 @@ class ClassHandler {
             return 'abstract';
         } else if (node.type === 'primitive_definition') {
             return 'primitive';
+        } else if (node.type === 'module_definition') {
+            return 'module';
         }
         return 'unknown';
     }
@@ -87,8 +98,15 @@ class ClassHandler {
             if (cursor.gotoFirstChild()) {
                 do {
                     const childNode = cursor.currentNode;
+
                     if (this.astAnalyzer.isClassNode(childNode.type)) {
                         this.handleNode(childNode, path, classId);
+                    } else if (this.astAnalyzer.isFunctionNode(childNode.type)) {
+                        // Handle functions defined within the class/module
+                        this.astAnalyzer.functionHandler.handleNode(childNode, path, classId);
+                    } else if (childNode.namedChildCount > 0) {
+                        // Recursively traverse other nodes
+                        this.traverseClassBody(childNode, path, classId);
                     }
                 } while (cursor.gotoNextSibling());
             }
@@ -96,4 +114,4 @@ class ClassHandler {
     }
 }
 
-export default ClassHandler;
+export default JuliaClassHandler;

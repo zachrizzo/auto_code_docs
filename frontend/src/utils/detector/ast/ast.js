@@ -7,6 +7,8 @@ import PythonFunctionHandler from './langs/python/functions';
 import JuliaFunctionHandler from './langs/julia/functions';
 import JavaFunctionHandler from './langs/java/functions';
 
+import JuliaClassHandler from './langs/julia/classes';
+
 import ClassHandler from './classes';
 
 const langs = {
@@ -94,37 +96,25 @@ const langs = {
     julia: {
         functions: [
             'function_definition',
-            'assignment',
+            'macro_definition',
+            // 'assignment', // For short function definitions //may be removed
+            'operator_definition', // For operators defined as functions
         ],
         classes: [
             'struct_definition',
             'abstract_definition',
             'primitive_definition',
+            'module_definition', // Modules can be considered as classes containing functions
         ],
         call: [
             'call_expression',
+            'macro_invocation',
         ],
         other: [
-            'module_definition',
-            'macro_definition',
-            'return_statement',
-            'where_expression',
-            'where_clause',
-            'binary_expression',
-            'unary_typed_expression',
-            'typed_expression',
-            'field_expression',
-            'string_literal',
-            'integer_literal',
-            'identifier',
-            'operator',
-            'argument_list',
-            'signature',
-            'type_clause',
-            'type_parameter_list',
-            'parametrized_type_expression',
-            'splat_expression',
-            'tuple_expression',
+            'import_statement',
+            'export_statement',
+            'using_statement',
+            'include_statement',
         ]
     },
 }
@@ -151,7 +141,7 @@ class ASTDetectionHandler {
         this.results.functionCallRelationships = this.results.functionCallRelationships || {};
 
         this.functionHandler = this.createFunctionHandler(language)
-        this.classHandler = new ClassHandler(this);
+        this.classHandler = this.createClassHandler(language);
 
         // Retrieve node types from the language configuration
         this.functionTypes = langs[language]?.functions || [];
@@ -186,6 +176,16 @@ class ASTDetectionHandler {
                 return new PythonFunctionHandler(this);
             default:
                 return new JavaScriptFunctionHandler(this); // Default handler
+        }
+    }
+
+    createClassHandler(language) {
+        switch (language) {
+            case 'julia':
+                return new JuliaClassHandler(this);
+            // Add other language-specific class handlers if needed
+            default:
+                return new ClassHandler(this);
         }
     }
 
