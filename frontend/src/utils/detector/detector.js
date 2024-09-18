@@ -1,3 +1,4 @@
+// detector.js
 import ASTDetectionHandler from './ast/ast.js';
 import { readFile, readdir, stat as _stat } from 'fs/promises';
 import { relative, join, extname } from 'path';
@@ -184,15 +185,23 @@ export function resolveCrossFileDependencies() {
                 const calledFunctionIds = globalFunctionNameToId[calledFunctionName] || [];
                 if (calledFunctionIds.length > 0) {
                     calledFunctionIds.forEach(calledFunctionId => {
+                        // Update allCalledFunctions
                         if (!sourceFileResults.allCalledFunctions[calledFunctionId]) {
                             sourceFileResults.allCalledFunctions[calledFunctionId] = [];
                         }
                         sourceFileResults.allCalledFunctions[calledFunctionId].push(callerNodeId);
 
-                        if (!globalResults[sourceFileName].crossFileRelationships[calledFunctionId]) {
-                            globalResults[sourceFileName].crossFileRelationships[calledFunctionId] = [];
+                        // Update crossFileRelationships
+                        if (!sourceFileResults.crossFileRelationships[callerNodeId]) {
+                            sourceFileResults.crossFileRelationships[callerNodeId] = [];
                         }
-                        globalResults[sourceFileName].crossFileRelationships[calledFunctionId].push(callerNodeId);
+                        sourceFileResults.crossFileRelationships[callerNodeId].push(calledFunctionId);
+
+                        // **Update functionCallRelationships**
+                        if (!sourceFileResults.functionCallRelationships[callerNodeId]) {
+                            sourceFileResults.functionCallRelationships[callerNodeId] = [];
+                        }
+                        sourceFileResults.functionCallRelationships[callerNodeId].push(calledFunctionId);
                     });
                 } else {
                     console.warn(`Unresolved function call: ${calledFunctionName} called by ${callerNodeId}`);

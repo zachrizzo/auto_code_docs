@@ -1,3 +1,5 @@
+// juliafunctions.js
+
 class FunctionHandler {
     constructor(astAnalyzer) {
         this.astAnalyzer = astAnalyzer;
@@ -9,7 +11,8 @@ class FunctionHandler {
 
         if (functionName && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
-            const id = this.astAnalyzer.addDeclaration(functionName, functionType, path, node.text);
+            // Pass node as an argument
+            const id = this.astAnalyzer.addDeclaration(functionName, functionType, path, node.text, node);
 
             if (id) {
                 if (parentId) {
@@ -28,59 +31,33 @@ class FunctionHandler {
     }
 
     extractFunctionName(node) {
-        console.log(`Extracting function name from node type: ${node.type}`);
-
         if (node.type === 'function_definition') {
-            const signatureNode = node.namedChildren.find(child => child.type === 'signature');
+            const signatureNode = node.childForFieldName('signature');
             if (signatureNode) {
-                const callExpressionNode = signatureNode.namedChildren.find(child => child.type === 'call_expression');
-                if (callExpressionNode) {
-                    const identifierNode = callExpressionNode.namedChildren.find(child => child.type === 'identifier');
-                    if (identifierNode) {
-                        return identifierNode.text;
-                    }
+                const identifierNode = signatureNode.namedChildren.find(child => child.type === 'identifier');
+                if (identifierNode) {
+                    return identifierNode.text;
                 }
             }
         } else if (node.type === 'assignment') {
-            const leftSide = node.namedChildren[0]; // The left side of the assignment
-            if (leftSide.type === 'call_expression') {
-                // This is likely a short-form function definition
+            const leftSide = node.childForFieldName('left');
+            if (leftSide.type === 'identifier') {
+                return leftSide.text;
+            } else if (leftSide.type === 'call_expression') {
                 const identifierNode = leftSide.namedChildren.find(child => child.type === 'identifier');
                 if (identifierNode) {
                     return identifierNode.text;
                 }
-                else {
-                    console.log(`Unhandled assignment type: ${leftSide.type}`);
-                }
-            } else if (leftSide.type === 'identifier') {
-                // This is a regular assignment, which we'll treat as a function if the right side is a function
-                const rightSide = node.namedChildren[2];
-                if (rightSide && (rightSide.type === 'function_definition' || rightSide.type === 'lambda')) {
-                    return leftSide.text;
-                }
-                else {
-                    console.log(`Unhandled assignment type: ${leftSide.type}`);
-                }
-            } else {
-                console.log(`Unhandled assignment type: ${leftSide.type}`);
             }
         }
-
-        console.log('Function name not found');
         return null;
     }
 
     getFunctionName(node) {
-        console.log(`Getting function name for node:`, JSON.stringify(node, null, 2));
-
         let name = this.extractFunctionName(node);
-        console.log(`Extracted name: ${name}`);
-
         if (!name) {
             name = this.getNameFromParent(node);
-            console.log(`Name from parent: ${name}`);
         }
-
         return name || 'anonymous';
     }
 
@@ -89,8 +66,7 @@ class FunctionHandler {
         if (parent) {
             if (parent.type === 'assignment') {
                 return parent.childForFieldName('left')?.text;
-            }
-            if (parent.type === 'macro_definition') {
+            } else if (parent.type === 'macro_definition') {
                 return parent.childForFieldName('name')?.text;
             }
         }
@@ -144,8 +120,15 @@ class FunctionHandler {
                     const childNode = cursor.currentNode;
                     if (this.astAnalyzer.isFunctionNode(childNode.type)) {
                         this.handleNode(childNode, path, functionId);
+                    } else if (this.astAnalyzer.isCalledNode(childNode.type)) {
+                        this.astAnalyzer.addFunctionCallRelationship(childNode);
+                    }
+                    // Recursively traverse all child nodes
+                    if (childNode.namedChildCount > 0) {
+                        this.traverseFunctionBody(childNode, path, functionId);
                     }
                 } while (cursor.gotoNextSibling());
+                cursor.gotoParent();
             }
         }
     }

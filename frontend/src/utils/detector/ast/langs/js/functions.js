@@ -1,3 +1,4 @@
+// jsfunctions.js
 class FunctionHandler {
     constructor(astAnalyzer) {
         this.astAnalyzer = astAnalyzer;
@@ -6,17 +7,25 @@ class FunctionHandler {
     handleNode(node, parentPath, parentId) {
         const functionName = this.getFunctionName(node);
 
-        //TODO handle anonymous functions and name them later
-        if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
-            const path = `${parentPath}${functionName}`;
-            const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
+        // Handle anonymous functions by assigning a unique name
+        let name = functionName;
+        if (!name || name === 'anonymous') {
+            name = `anonymous_${this.astAnalyzer.getUniqueId(node.text)}`;
+        }
+
+        if (this.shouldProcessFunction(name)) {
+            const path = `${parentPath}${name}`;
+            const id = this.astAnalyzer.addDeclaration(name, this.getFunctionType(node), path, node.text);
 
             if (id) {
                 if (parentId) {
                     this.addFunctionRelationship(id, parentId);
                 }
 
-                this.astAnalyzer.processedFunctions.add(functionName);
+                this.astAnalyzer.processedFunctions.add(name);
+
+                // Traverse the function body to detect nested functions
+                this.traverseFunctionBody(node, path, id);
 
                 return id;
             }
@@ -92,42 +101,12 @@ class FunctionHandler {
                     const childNode = cursor.currentNode;
                     if (this.astAnalyzer.isFunctionNode(childNode.type)) {
                         this.handleNode(childNode, path, functionId);
+                    } else if (this.astAnalyzer.isCalledNode(childNode.type)) {
+                        this.astAnalyzer.addFunctionCallRelationship(childNode);
                     }
                 } while (cursor.gotoNextSibling());
             }
         }
-    }
-    getCalledFunctionName(node) {
-        if (this.astAnalyzer.isCalledNode(node.type)) {
-            let functionNode = node.child(0);
-
-            // Handle different node structures
-            if (functionNode) {
-                if (functionNode.type === 'identifier') {
-                    return functionNode.text;
-                } else if (['member_expression', 'attribute', 'field_expression'].includes(functionNode.type)) {
-                    // Handle object method calls (e.g., object.method())
-                    let objectName = functionNode.child(0)?.text;
-                    let propertyName = functionNode.child(1)?.text;
-                    if (objectName && propertyName) {
-                        return `${objectName}.${propertyName}`;
-                    }
-                } else if (functionNode.type.includes('function')) {
-                    // Handle anonymous function calls
-                    return 'anonymous';
-                }
-            }
-
-            // If we couldn't identify the function name from the first child,
-            // try to find an identifier among the node's children
-            for (let i = 0; i < node.namedChildCount; i++) {
-                let child = node.namedChild(i);
-                if (child.type === 'identifier') {
-                    return child.text;
-                }
-            }
-        }
-        return null;
     }
 }
 

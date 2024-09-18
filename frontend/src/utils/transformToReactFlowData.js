@@ -1,8 +1,8 @@
+// transformToReactFlow.js
 import ELK from 'elkjs/lib/elk.bundled.js';
 
 const elk = new ELK();
 
-// Configuration for the layout
 const layoutOptions = {
     'elk.algorithm': 'layered',
     'elk.direction': 'RIGHT',
@@ -40,7 +40,7 @@ export async function transformToReactFlowData(parsedData) {
 
         const allDeclarations = fileData.allDeclarations || {};
         for (const [id, declaration] of Object.entries(allDeclarations)) {
-            const nodeLabel = declaration.name + (id.toLowerCase().includes('copy') ? ' (Duplicate)' : '');
+            const nodeLabel = declaration.name;
             const code = declaration.code || '';
             nodes.push(createNode(id, nodeLabel, code));
             nodeSet.add(id);
@@ -93,13 +93,12 @@ export async function transformToReactFlowData(parsedData) {
         position: getNodePosition(layoutedGraph, node.id),
     }));
 
-
     return { nodes: layoutedNodes, edges };
 }
 
 // Helper functions
 function createNode(id, label, code) {
-    const isDuplicate = id.toLowerCase().includes('copy');
+    const isDuplicate = /\(\d+\)$/.test(label); // Check if label ends with (number)
     return {
         id,
         data: {

@@ -1,4 +1,4 @@
-
+// ast.js
 
 import { createHash } from 'crypto';
 import { relative, isAbsolute } from 'path';
@@ -9,41 +9,39 @@ import JavaFunctionHandler from './langs/java/functions';
 
 import ClassHandler from './classes';
 
-
-
 const langs = {
     python: {
         functions: [
-            'function_definition',  // Represents a function definition
-            'lambda',               // Represents a lambda function
-            'async_function_definition', // Represents an async function
+            'function_definition',
+            'lambda',
+            'async_function_definition',
             'function'
         ],
         classes: [
-            'class_definition' // Represents a class definition
+            'class_definition'
         ],
         call: [
             'call',
         ],
         other: [
-            'import_statement',        // Represents an import statement
-            'import_from_statement',   // Represents a from-import statement
-            'call',                    // Represents a function call
-            'if_statement',            // Represents an if statement
-            'for_statement',           // Represents a for loop
+            'import_statement',
+            'import_from_statement',
+            'call',
+            'if_statement',
+            'for_statement',
         ]
     },
     javascript: {
         functions: [
-            'function_declaration',   // Function declaration
-            'function_expression',    // Function expression
-            'arrow_function',         // Arrow function
-            'method_definition',      // Method in a class or object
+            'function_declaration',
+            'function_expression',
+            'arrow_function',
+            'method_definition',
             'function'
         ],
         classes: [
-            'class_declaration', // Class declaration
-            'class_expression'   // Class expression
+            'class_declaration',
+            'class_expression'
         ],
         call: [
             'call_expression',
@@ -51,85 +49,85 @@ const langs = {
             'jsx_self_closing_element'
         ],
         other: [
-            'call_expression',       // Represents a function call
-            'import_statement',      // Represents an import statement
-            'export_default_declaration', // Represents an export default
-            'export_named_declaration',   // Represents a named export
+            'call_expression',
+            'import_statement',
+            'export_default_declaration',
+            'export_named_declaration',
         ]
     },
     java: {
         functions: [
-            'method_declaration',      // Method declaration in a class
-            'constructor_declaration',  // Constructor declaration in a class
+            'method_declaration',
+            'constructor_declaration',
             'function'
         ],
         classes: [
-            'class_declaration',       // Class declaration
-            'interface_declaration'    // Interface declaration
+            'class_declaration',
+            'interface_declaration'
         ],
         call: [
             'method_invocation',
         ],
         other: [
-            'import_declaration',      // Import statement
-            'package_declaration',     // Package statement
-            'method_invocation',       // Method call
+            'import_declaration',
+            'package_declaration',
+            'method_invocation',
         ]
     },
     ruby: {
         functions: [
-            'method',   // Represents a method definition
-            'lambda',   // Represents a lambda function
+            'method',
+            'lambda',
             'function'
         ],
         classes: [
-            'class',    // Represents a class definition
-            'module'    // Represents a module definition
+            'class',
+            'module'
         ],
         call: [
             'call',
         ],
         other: [
-            'call',     // Represents a function call
-            'require',  // Require statement
-            'if',       // If statement
-            'while',    // While loop
+            'call',
+            'require',
+            'if',
+            'while',
         ]
     },
     julia: {
         functions: [
-            'function_definition',   // Function definitions
-            'assignment',            // Short-form function definitions
+            'function_definition',
+            'assignment',
         ],
         classes: [
-            'struct_definition',     // Struct definitions
-            'abstract_definition',   // Abstract type definitions
-            'primitive_definition',  // Primitive type definitions
+            'struct_definition',
+            'abstract_definition',
+            'primitive_definition',
         ],
         call: [
-            'call_expression',       // Function calls
+            'call_expression',
         ],
         other: [
-            'module_definition',     // Module definitions
-            'macro_definition',      // Macro definitions
-            'return_statement',      // Return statements
-            'where_expression',      // Where clauses
-            'where_clause',          // Where clauses in function signatures
-            'binary_expression',     // Binary operations
-            'unary_typed_expression', // Type annotations
-            'typed_expression',      // Type annotations
-            'field_expression',      // Accessing fields (e.g., object.field)
-            'string_literal',        // String literals
-            'integer_literal',       // Integer literals
-            'identifier',            // Variable and function names
-            'operator',              // Operators
-            'argument_list',         // Function arguments
-            'signature',             // Function signatures
-            'type_clause',           // Type clauses (e.g., <:)
-            'type_parameter_list',   // Type parameters
-            'parametrized_type_expression', // Parameterized types
-            'splat_expression',      // Splat expressions (...)
-            'tuple_expression',      // Tuple expressions
+            'module_definition',
+            'macro_definition',
+            'return_statement',
+            'where_expression',
+            'where_clause',
+            'binary_expression',
+            'unary_typed_expression',
+            'typed_expression',
+            'field_expression',
+            'string_literal',
+            'integer_literal',
+            'identifier',
+            'operator',
+            'argument_list',
+            'signature',
+            'type_clause',
+            'type_parameter_list',
+            'parametrized_type_expression',
+            'splat_expression',
+            'tuple_expression',
         ]
     },
 }
@@ -145,7 +143,7 @@ class ASTDetectionHandler {
         this.currentFile = currentFile;
         this.importedModules = new Set();
 
-        this.globalFunctionNameToId = globalFunctionNameToId; // Add this line
+        this.globalFunctionNameToId = globalFunctionNameToId;
 
         this.currentClassId = null;
         this.currentFunctionId = null;
@@ -158,7 +156,6 @@ class ASTDetectionHandler {
         this.functionHandler = this.createFunctionHandler(language)
         this.classHandler = new ClassHandler(this);
 
-
         // Retrieve node types from the language configuration
         this.functionTypes = langs[language]?.functions || [];
         this.classTypes = langs[language]?.classes || [];
@@ -166,6 +163,9 @@ class ASTDetectionHandler {
         this.otherTypes = langs[language]?.other || [];
 
         this.initializeResults();
+
+        this.functionNameCounts = {}; // Map of function names to counts
+        this.codeHashToFunctionIds = {}; // Map of code hashes to function IDs
     }
 
     initializeResults() {
@@ -212,9 +212,9 @@ class ASTDetectionHandler {
         return this.calledFunction.includes(nodeType);
     }
 
-    addRootLevelRelationship(nodeId) {
-        if (!this.results.rootFunctionIds.includes(nodeId)) {
-            this.results.rootFunctionIds.push(nodeId);
+    addRootLevelRelationship(id) {
+        if (!this.results.rootFunctionIds.includes(id)) {
+            this.results.rootFunctionIds.push(id);
         }
     }
 
@@ -223,18 +223,23 @@ class ASTDetectionHandler {
             return null;
         }
 
-        const id = this.getUniqueId(code);
+        // Generate a unique ID for the function based on its code content
+        const codeHash = this.getUniqueId(code);
+        const id = `${codeHash}-${this.currentFile}-${name}`;
 
-        if (this.isFunctionNode(type)) {
-            if (!this.globalFunctionNameToId[name]) {
-                this.globalFunctionNameToId[name] = [];
-            }
-            this.globalFunctionNameToId[name].push(id);
+        // Check for duplicates without modifying ID
+        let isDuplicate = false;
+        if (this.results.allDeclarations[id]) {
+            isDuplicate = true;
+            // Optionally, you can append a count to the display name
+            const duplicateCount = (this.duplicateCounts[name] || 1) + 1;
+            this.duplicateCounts[name] = duplicateCount;
+            name = `${name} (${duplicateCount})`; // Update display name
         }
 
         const declaration = {
             id,
-            name,
+            name, // Use updated name for display
             type,
             path,
             code,
@@ -243,6 +248,13 @@ class ASTDetectionHandler {
         };
 
         this.results.allDeclarations[id] = declaration;
+
+        // **Update globalFunctionNameToId**
+        if (!this.globalFunctionNameToId[name]) {
+            this.globalFunctionNameToId[name] = [];
+        }
+        this.globalFunctionNameToId[name].push(id);
+
         return id;
     }
 
@@ -297,7 +309,7 @@ class ASTDetectionHandler {
             if (!node) return;
 
             const nodeType = node.type;
-            console.log('type', nodeType)
+            // console.log('type', nodeType)
             const nodeCode = node.text;
 
             const currentNodeId = this.getUniqueId(nodeCode);
@@ -312,10 +324,14 @@ class ASTDetectionHandler {
                     cursor.gotoParent();
                 }
             } else if (isFunction || isClass) {
-                if (isFunction) this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
-                if (isClass) this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
-
-                this.parentStack.push(currentNodeId);
+                if (isFunction) {
+                    const functionId = this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    this.parentStack.push(functionId);
+                }
+                if (isClass) {
+                    const classId = this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    this.parentStack.push(classId);
+                }
 
                 if (isRootLevel) {
                     this.addRootLevelRelationship(currentNodeId);
@@ -346,36 +362,27 @@ class ASTDetectionHandler {
 
     getCalledFunctionName(node) {
         if (this.isCalledNode(node.type)) {
-            const firstChild = node.namedChildren[0];
-            if (firstChild) {
-                if (firstChild.type === 'identifier') {
+            let functionNode = node.childForFieldName('function') || node.namedChildren[0];
+
+            if (functionNode) {
+                if (functionNode.type === 'identifier') {
                     // Simple function call
-                    return firstChild.text;
-                } else if (firstChild.type === 'field_expression') {
-                    // Method call or namespaced function call
-                    const objectName = firstChild.namedChildren[0]?.text;
-                    const methodName = firstChild.namedChildren[1]?.text;
-                    if (objectName && methodName) {
-                        return `${objectName}.${methodName}`;
+                    return functionNode.text;
+                } else if (['member_expression', 'attribute', 'field_expression'].includes(functionNode.type)) {
+                    // Handle object method calls (e.g., object.method())
+                    let objectNode = functionNode.childForFieldName('object');
+                    let propertyNode = functionNode.childForFieldName('property');
+                    if (objectNode && propertyNode) {
+                        return `${objectNode.text}.${propertyNode.text}`;
                     }
-                } else if (firstChild.type.includes('function')) {
+                } else if (functionNode.type.includes('function')) {
                     // Anonymous function call
                     return 'anonymous';
-                }
-            }
-
-            // If we couldn't identify the function name from the first child,
-            // try to find an identifier among the node's children
-            for (let i = 0; i < node.namedChildCount; i++) {
-                let child = node.namedChild(i);
-                if (child.type === 'identifier') {
-                    return child.text;
                 }
             }
         }
         return null;
     }
-
 
     finalizeRelationships() {
         // Convert Sets to Arrays in functionCallRelationships
@@ -390,5 +397,4 @@ class ASTDetectionHandler {
     }
 }
 
-const _default = ASTDetectionHandler;
-export { _default as default };
+export default ASTDetectionHandler;
