@@ -24,7 +24,7 @@ class FunctionHandler {
 
                 this.astAnalyzer.processedFunctions.add(name);
 
-                // Traverse the function body to detect nested functions
+                // Traverse the function body to detect nested functions and function calls
                 this.traverseFunctionBody(node, path, id);
 
                 return id;
@@ -103,6 +103,11 @@ class FunctionHandler {
                         this.handleNode(childNode, path, functionId);
                     } else if (this.astAnalyzer.isCalledNode(childNode.type)) {
                         this.astAnalyzer.addFunctionCallRelationship(childNode);
+                    } else {
+                        // Recursively traverse other nodes
+                        if (childNode.namedChildCount > 0) {
+                            this.traverseFunctionBody(childNode, path, functionId);
+                        }
                     }
                 } while (cursor.gotoNextSibling());
             }

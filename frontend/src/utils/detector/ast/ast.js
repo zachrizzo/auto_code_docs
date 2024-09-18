@@ -166,6 +166,7 @@ class ASTDetectionHandler {
 
         this.functionNameCounts = {}; // Map of function names to counts
         this.codeHashToFunctionIds = {}; // Map of code hashes to function IDs
+        this.duplicateCounts = {}; // For handling duplicates
     }
 
     initializeResults() {
@@ -265,16 +266,15 @@ class ASTDetectionHandler {
         if (calledFunctionName) {
             // Get the ID(s) of the called function from global declarations
             const calledFunctionIds = this.globalFunctionNameToId[calledFunctionName] || [];
-
-            // If the declaration isn't found, defer the resolution
-            if (calledFunctionIds.length === 0) {
+            if (calledFunctionIds.length > 0) {
+                // Record the relationship immediately if declarations are known
+                this.recordFunctionCall(callerNodeId, calledFunctionIds);
+            } else {
+                // If the declaration isn't found, defer the resolution
                 if (!this.results.deferredFunctionCalls) {
                     this.results.deferredFunctionCalls = [];
                 }
                 this.results.deferredFunctionCalls.push({ callerNodeId, calledFunctionName });
-            } else {
-                // Record the relationship immediately if declarations are known
-                this.recordFunctionCall(callerNodeId, calledFunctionIds);
             }
         }
     }
@@ -309,10 +309,10 @@ class ASTDetectionHandler {
             if (!node) return;
 
             const nodeType = node.type;
-            // console.log('type', nodeType)
             const nodeCode = node.text;
 
-            const currentNodeId = this.getUniqueId(nodeCode);
+            // **Updated to use the ID returned from handleNode**
+            let currentNodeId = null;
 
             const isFunction = this.isFunctionNode(nodeType);
             const isClass = this.isClassNode(nodeType);
@@ -326,14 +326,16 @@ class ASTDetectionHandler {
             } else if (isFunction || isClass) {
                 if (isFunction) {
                     const functionId = this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    currentNodeId = functionId;
                     this.parentStack.push(functionId);
                 }
                 if (isClass) {
                     const classId = this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    currentNodeId = classId;
                     this.parentStack.push(classId);
                 }
 
-                if (isRootLevel) {
+                if (isRootLevel && currentNodeId) {
                     this.addRootLevelRelationship(currentNodeId);
                 }
 
@@ -347,12 +349,12 @@ class ASTDetectionHandler {
                 this.addFunctionCallRelationship(node);
 
                 if (cursor.gotoFirstChild()) {
-                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, parentId, isRootLevel);
                     cursor.gotoParent();
                 }
             } else {
                 if (cursor.gotoFirstChild()) {
-                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, this.parentStack[this.parentStack.length - 1], isRootLevel);
+                    this.traverseAndDetect(cursor, `${parentPath}${nodeType}-`, parentId, isRootLevel);
                     cursor.gotoParent();
                 }
             }
@@ -377,7 +379,7 @@ class ASTDetectionHandler {
                     }
                 } else if (functionNode.type.includes('function')) {
                     // Anonymous function call
-                    return 'anonymous';
+                    return `anonymous_${this.getUniqueId(functionNode.text)}`;
                 }
             }
         }

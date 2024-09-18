@@ -211,10 +211,6 @@ export function resolveCrossFileDependencies() {
         }
     }
 
-    // console.log("Cross-file dependencies resolved.");
-    // console.log("Updated globalResults:", globalResults);
-    // console.log('globalFunctionNameToId', globalFunctionNameToId);
-
     return globalResults;
 }
 
