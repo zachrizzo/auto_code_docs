@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Button, Stack, Container, TextField, Select, MenuItem, Typography, Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer.jsx';
@@ -336,20 +336,20 @@ function App() {
                     },
                 }}
             />
-            <Router>
+            <HashRouter>
                 {/* Optional: Show Header if user is logged in */}
                 {user && <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
                 <Container>
                     <Routes>
                         {/* If user is logged in, show Home; otherwise, show Login */}
-                        <Route path="/main_window" element={auth?.currentUser ? <Home /> : <Login />} />
+                        <Route path="main_window" element={auth?.currentUser ? <Home /> : <Login />} />
                         {/* Additional routes for other components */}
-                        <Route path="/analyze" element={<Analyzer />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<SignUp />} />
+                        <Route path="analyze" element={<Analyzer />} />
+                        <Route path="login" element={<Login />} />
+                        <Route path="signup" element={<SignUp />} />
                     </Routes>
                 </Container>
-            </Router>
+            </HashRouter>
         </ThemeProvider>
     );
 }
