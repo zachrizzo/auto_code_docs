@@ -36,6 +36,8 @@ import 'react-resizable/css/styles.css';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark'; // Import the dark theme
+import ReactMarkdown from 'react-markdown'
+
 
 const { ipcRenderer } = window.electronAPI;
 
@@ -57,9 +59,6 @@ const Analyzer = () => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerWidth, setDrawerWidth] = useState(400);
     const theme = useTheme();
-
-
-
 
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
@@ -117,7 +116,6 @@ const Analyzer = () => {
             alert('An error occurred while saving the file.');
         }
     };
-
 
     const handleNodeClick = useCallback(
         async (nodeId) => {
@@ -238,15 +236,14 @@ const Analyzer = () => {
         };
     }, [handleSave]);
 
-
     return (
         <Box
             sx={{
-                width: '90vh', // Set the component width to 90% of the viewport
-                margin: '0 auto', // Center the component horizontally
+                width: '100vw', // Set to 100% of the viewport width
+                height: '100vh', // Set to 100% of the viewport height
                 display: 'flex',
                 flexDirection: 'column',
-                height: '100vh',
+                overflow: 'hidden', // Prevent overflow
             }}
         >
             {/* Controls */}
@@ -257,7 +254,7 @@ const Analyzer = () => {
                     alignItems: 'center',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
-                    backgroundColor: theme.palette.primary, // Updated background color
+                    backgroundColor: theme.palette.primary, // Ensure proper color usage
                 }}
             >
                 <Typography variant="h6" sx={{ flexGrow: 1, color: theme.palette.primary.contrastText }}>
@@ -320,9 +317,9 @@ const Analyzer = () => {
             </Box>
 
             {/* Main Content and Resizable Drawer */}
-            <Box sx={{ display: 'flex', flexGrow: 1, height: '100%' }}>
+            <Box sx={{ display: 'flex', flexGrow: 1, height: '100%', position: 'relative' }}>
                 {/* Main Content */}
-                <Box sx={{ flexGrow: 1 }}>
+                <Box sx={{ flexGrow: 1, height: '100%', overflow: 'hidden' }}>
                     {isLoading ? (
                         <Box
                             sx={{
@@ -378,6 +375,13 @@ const Analyzer = () => {
                                 }}
                             />
                         }
+                        sx={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            zIndex: 1300, // Ensure it's above other elements
+                        }}
                     >
                         <Box
                             sx={{
@@ -409,15 +413,15 @@ const Analyzer = () => {
                                 variant="contained"
                                 color="primary"
                                 onClick={handleSave}
-                                sx={{ mb: 2 }}
+                                sx={{ mb: 2, m: 2 }}
                             >
                                 Save
                             </Button>
 
                             <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
-                                <Typography variant="body1" gutterBottom>
+                                <ReactMarkdown variant="body1" gutterBottom>
                                     {aiDescriptions[selectedNode?.id] || 'Loading description...'}
-                                </Typography>
+                                </ReactMarkdown>
                                 <Typography variant="h6" gutterBottom>
                                     Code:
                                 </Typography>

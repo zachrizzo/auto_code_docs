@@ -23,6 +23,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsPanel from '../settings/SettingPanel';
 import PropTypes from 'prop-types';
+import { Code } from '@mui/icons-material';
 
 const Header = ({ darkMode, toggleDarkMode }) => {
     const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
@@ -128,10 +129,12 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                         }}
                     >
                         {/* Replace with your logo if available */}
-                        <HomeIcon sx={{ mr: 1, fontSize: 30 }} />
-                        <Typography variant="h6" noWrap>
-                            MyApp
-                        </Typography>
+                        <Code sx={{ mr: 1, fontSize: 30 }} />
+                        <Tooltip title="Home">
+                            <Typography variant="h6" noWrap>
+                                Fractal X
+                            </Typography>
+                        </Tooltip>
                     </Box>
 
                     {/* Spacer */}
@@ -150,16 +153,7 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                                     <SettingsIcon />
                                 </IconButton>
                             </Tooltip>
-                            <Tooltip title="Home">
-                                <IconButton
-                                    component={RouterLink}
-                                    to="/"
-                                    color="inherit"
-                                    sx={{ ml: 2 }}
-                                >
-                                    <HomeIcon />
-                                </IconButton>
-                            </Tooltip>
+
                         </Box>
                     )}
 

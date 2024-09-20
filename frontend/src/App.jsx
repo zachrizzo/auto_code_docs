@@ -1,14 +1,27 @@
+// src/App.jsx
 import React, { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { Button, Stack, Container, TextField, Select, MenuItem, Typography, Box, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { HashRouter, Routes, Route, useLocation } from 'react-router-dom';
+import {
+    Button,
+    Stack,
+    Container,
+    TextField,
+    Select,
+    MenuItem,
+    Typography,
+    Box,
+    ThemeProvider,
+    createTheme,
+    CssBaseline
+} from '@mui/material';
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer.jsx';
 import Header from './components/layout/Header.jsx';
 // import DatabaseManagementPage from './pages/Database.jsx';
 import SignUp from './pages/SignUp.jsx';
 import { onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth methods
-import Login from './pages/LoginPage.jsx'
-import { auth } from './firebase/firebase.js'
+import Login from './pages/LoginPage.jsx';
+import { auth } from './firebase/firebase.js';
 import Home from './pages/Home.jsx';
 
 
@@ -110,13 +123,10 @@ const lightTheme = createTheme({
         MuiPaper: {
             styleOverrides: {
                 root: {
-
                     backgroundColor: lightThemeColors.background,
                 },
             },
         },
-
-
     },
     palette: {
         mode: 'light',
@@ -234,7 +244,6 @@ const darkTheme = createTheme({
                 },
             },
         },
-
         MuiModal: {
             styleOverrides: {
                 root: {
@@ -254,20 +263,15 @@ const darkTheme = createTheme({
             },
         },
     },
-
     palette: {
         mode: 'dark',
-        background: { main: darkThemeColors.background, },
+        background: { main: darkThemeColors.background },
         accentColor: { main: darkThemeColors.accentColor },
         primary: { main: darkThemeColors.primaryStart },
         secondary: { main: darkThemeColors.secondaryMain },
         text: { primary: darkThemeColors.textMain },
     },
 });
-
-
-
-
 
 function App() {
     const [darkMode, setDarkMode] = useState(true);
@@ -318,21 +322,25 @@ function App() {
             <HashRouter>
                 {/* Optional: Show Header if user is logged in */}
                 {user && <Header darkMode={darkMode} toggleDarkMode={toggleDarkMode} />}
-                <Container>
-                    <Routes>
-                        {/* If user is logged in, show Home; otherwise, show Login */}
-                        <Route path="/" element={auth?.currentUser ? <Home /> : <Login />} />
-                        {/* Additional routes for other components */}
-                        <Route path="analyze" element={<Analyzer />} />
-                        <Route path="login" element={<Login />} />
-                        <Route path="signup" element={<SignUp />} />
-                    </Routes>
-                </Container>
+                <Routes>
+                    {/* If user is logged in, show Home; otherwise, show Login */}
+                    <Route path="/" element={auth?.currentUser ? <Home /> : <Login />} />
+                    {/* Analyzer Route with Full-Screen Layout */}
+                    <Route
+                        path="analyze"
+                        element={
+                            <Box sx={{ width: '100vw', height: '100vh', p: 0 }}>
+                                <Analyzer />
+                            </Box>
+                        }
+                    />
+                    {/* Additional routes for other components */}
+                    <Route path="login" element={<Login />} />
+                    <Route path="signup" element={<SignUp />} />
+                </Routes>
             </HashRouter>
         </ThemeProvider>
     );
 }
 
 export default App;
-
-
