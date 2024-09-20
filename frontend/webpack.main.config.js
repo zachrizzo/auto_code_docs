@@ -30,7 +30,8 @@ module.exports = {
   ],
 
   externals: {
-    'tree-sitter': 'commonjs tree-sitter'  // Ensure that Tree-sitter is properly resolved
+    'tree-sitter': 'commonjs tree-sitter', // Ensure that Tree-sitter is properly resolved
+    'electron-reload': 'commonjs electron-reload'
   },
 
   resolve: {

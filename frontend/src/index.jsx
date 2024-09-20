@@ -8,4 +8,7 @@ const root = createRoot(document.body);
 // const container = document.createElement('div');
 // document.body.appendChild(container);
 // const root = createRoot(container);
+if (module.hot) {
+    module.hot.accept();
+}
 root.render(<App />);

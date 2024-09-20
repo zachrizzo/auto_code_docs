@@ -5,7 +5,17 @@ const path = require('path');
 const fs = require('fs').promises;
 const { analyzeDirectory, initializeParser } = require('./utils/detector/detector.js');
 const { transformToReactFlowData } = require('./utils/transformToReactFlowData.js');
+const electronReload = require('electron-reload');
+const rootPath = path.resolve(__dirname, '../../..');
 
+electronReload(rootPath, {
+  // Don't specify the electron path here
+  hardResetMethod: 'exit'
+});
+
+
+
+console.log('Main process started', __dirname, path.resolve(__dirname, '../',), __filename);
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
