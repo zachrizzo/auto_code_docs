@@ -13,8 +13,6 @@ import {
     Button,
     Tooltip,
     CircularProgress,
-    Grid,
-    Drawer,
     Divider,
 } from '@mui/material';
 import {
@@ -28,7 +26,7 @@ import {
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
 import CodeFlowChart from '../components/analyzer/mindMap/CodeMap';
 import { getAIDescription, generateUnitTest } from '../api/CodeDocumentation';
-import NodeClickContext from '../contexts/NodeClickContext'; // Ensure the path is correct
+import NodeClickContext from '../contexts/NodeClickContext';
 import { ReactFlowProvider } from 'reactflow';
 import { useTheme } from '@mui/material/styles';
 import { ResizableBox } from 'react-resizable';
@@ -37,6 +35,7 @@ import 'react-resizable/css/styles.css';
 // CodeMirror imports
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
+import { oneDark } from '@codemirror/theme-one-dark'; // Import the dark theme
 
 const { ipcRenderer } = window.electronAPI;
 
@@ -58,6 +57,9 @@ const Analyzer = () => {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerWidth, setDrawerWidth] = useState(400);
     const theme = useTheme();
+
+
+
 
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
@@ -91,6 +93,32 @@ const Analyzer = () => {
         setIsDrawerOpen(false);
     };
 
+    const handleSave = async () => {
+        if (!selectedNode || !selectedNode.id) {
+            alert('No node selected to save.');
+            return;
+        }
+
+        const filePath = selectedNode.filePath;
+        if (!filePath) {
+            alert('File path not available for this code.');
+            return;
+        }
+
+        try {
+            const result = await ipcRenderer.invoke('save-file', { filePath, content: editedCode });
+            if (result.success) {
+                alert('File saved successfully.');
+            } else {
+                alert(`Failed to save file: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error saving file:', error);
+            alert('An error occurred while saving the file.');
+        }
+    };
+
+
     const handleNodeClick = useCallback(
         async (nodeId) => {
             if (!nodeId) {
@@ -116,7 +144,12 @@ const Analyzer = () => {
                 setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'No code available for this node.' }));
                 return;
             }
-            setSelectedNode({ id: nodeId, code: nodeData.data.code, label: nodeData.data.label });
+            setSelectedNode({
+                id: nodeId,
+                code: nodeData.data.code,
+                label: nodeData.data.label,
+                filePath: nodeData.data.filePath, // Include filePath
+            });
             setIsDrawerOpen(true);
 
             if (!aiDescriptions[nodeId]) {
@@ -190,8 +223,32 @@ const Analyzer = () => {
         setDrawerWidth(size.width);
     };
 
+    useEffect(() => {
+        const handleKeyDown = (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+                event.preventDefault();
+                handleSave();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [handleSave]);
+
+
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Box
+            sx={{
+                width: '90vh', // Set the component width to 90% of the viewport
+                margin: '0 auto', // Center the component horizontally
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',
+            }}
+        >
             {/* Controls */}
             <Box
                 sx={{
@@ -200,20 +257,20 @@ const Analyzer = () => {
                     alignItems: 'center',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
-                    backgroundColor: theme.palette.background.paper,
+                    backgroundColor: theme.palette.primary, // Updated background color
                 }}
             >
-                <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                <Typography variant="h6" sx={{ flexGrow: 1, color: theme.palette.primary.contrastText }}>
                     Code Analyzer
                 </Typography>
                 <Tooltip title="Select Directory">
-                    <IconButton color="primary" onClick={() => setIsDirectoryDialogOpen(true)}>
+                    <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
                         <FolderOpenIcon />
                     </IconButton>
                 </Tooltip>
                 <Tooltip title="Analyze">
                     <IconButton
-                        color="primary"
+                        color="inherit"
                         onClick={handleAnalyze}
                         disabled={!watchingDir || isLoading}
                     >
@@ -221,13 +278,13 @@ const Analyzer = () => {
                     </IconButton>
                 </Tooltip>
                 <Tooltip title="Clear Results">
-                    <IconButton color="primary" onClick={clear}>
+                    <IconButton color="inherit" onClick={clear}>
                         <ClearAllIcon />
                     </IconButton>
                 </Tooltip>
                 <Tooltip title="Toggle View">
                     <IconButton
-                        color="primary"
+                        color="inherit"
                         onClick={() => setViewMode(viewMode === 'map' ? 'tree' : 'map')}
                     >
                         <SwapHorizIcon />
@@ -242,6 +299,7 @@ const Analyzer = () => {
                         display: 'flex',
                         alignItems: 'center',
                         width: 250,
+                        backgroundColor: theme.palette.background.paper,
                     }}
                 >
                     <TextField
@@ -251,6 +309,9 @@ const Analyzer = () => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         sx={{ ml: 1, flex: 1 }}
+                        InputProps={{
+                            disableUnderline: true,
+                        }}
                     />
                     <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
                         <SearchIcon />
@@ -258,9 +319,10 @@ const Analyzer = () => {
                 </Paper>
             </Box>
 
-            {/* Main Content */}
-            <Grid container sx={{ flexGrow: 1 }}>
-                <Grid item xs={12} sx={{ height: '100%' }}>
+            {/* Main Content and Resizable Drawer */}
+            <Box sx={{ display: 'flex', flexGrow: 1, height: '100%' }}>
+                {/* Main Content */}
+                <Box sx={{ flexGrow: 1 }}>
                     {isLoading ? (
                         <Box
                             sx={{
@@ -290,91 +352,113 @@ const Analyzer = () => {
                             </NodeClickContext.Provider>
                         </ReactFlowProvider>
                     )}
-                </Grid>
-            </Grid>
+                </Box>
 
-            {/* Details Drawer */}
-            <Drawer
-                anchor="right"
-                open={isDrawerOpen}
-                onClose={() => setIsDrawerOpen(false)}
-                variant="persistent"
-                PaperProps={{
-                    sx: {
-                        width: drawerWidth,
-                        display: 'flex',
-                        flexDirection: 'column',
-                    },
-                }}
-            >
-                <ResizableBox
-                    width={drawerWidth}
-                    height={Infinity}
-                    minConstraints={[drawerMinWidth, 0]}
-                    maxConstraints={[drawerMaxWidth, Infinity]}
-                    axis="x"
-                    onResize={handleDrawerResize}
-                    handle={
+                {/* Resizable Drawer */}
+                {isDrawerOpen && (
+                    <ResizableBox
+                        width={drawerWidth}
+                        height={Infinity}
+                        minConstraints={[drawerMinWidth, 0]}
+                        maxConstraints={[drawerMaxWidth, Infinity]}
+                        axis="x"
+                        resizeHandles={['w']} // Allow resizing from the left side
+                        onResize={handleDrawerResize}
+                        handle={
+                            <Box
+                                sx={{
+                                    width: '5px',
+                                    cursor: 'col-resize',
+                                    position: 'absolute',
+                                    left: 0,
+                                    top: 0,
+                                    bottom: 0,
+                                    zIndex: 1,
+                                    backgroundColor: theme.palette.divider,
+                                }}
+                            />
+                        }
+                    >
                         <Box
                             sx={{
-                                width: '10px',
-                                cursor: 'col-resize',
-                                padding: '4px 0 0',
-                                borderTop: '1px solid #ddd',
-                                position: 'absolute',
-                                top: 0,
-                                right: 0,
-                                bottom: 0,
-                                zIndex: 100,
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                backgroundColor: theme.palette.background.paper,
+                                position: 'relative',
                             }}
-                        />
-                    }
-                >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid #ddd' }}>
-                        <Typography variant="h6">{selectedNode?.label}</Typography>
-                        <IconButton onClick={() => setIsDrawerOpen(false)}>
-                            <CloseIcon />
-                        </IconButton>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
-                        <Typography variant="body1" gutterBottom>
-                            {aiDescriptions[selectedNode?.id] || 'Loading description...'}
-                        </Typography>
-                        <Typography variant="h6" gutterBottom>
-                            Code:
-                        </Typography>
-                        <Box sx={{ height: 300, mb: 2 }}>
-                            <CodeMirror
-                                value={editedCode}
-                                height="100%"
-                                extensions={[javascript()]}
-                                onChange={(value) => setEditedCode(value)}
-                            />
-                        </Box>
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            onClick={handleGenerateUnitTest}
-                            sx={{ mb: 2 }}
                         >
-                            Generate Unit Test
-                        </Button>
-                        {unitTest && (
-                            <>
-                                <Typography variant="h6" gutterBottom>
-                                    Generated Unit Test:
+                            <Box
+                                sx={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    p: 2,
+                                    borderBottom: '1px solid',
+                                    borderColor: 'divider',
+                                }}
+                            >
+                                <Typography variant="h6">{selectedNode?.label}</Typography>
+                                <IconButton onClick={() => setIsDrawerOpen(false)}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Box>
+                            <Divider />
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleSave}
+                                sx={{ mb: 2 }}
+                            >
+                                Save
+                            </Button>
+
+                            <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
+                                <Typography variant="body1" gutterBottom>
+                                    {aiDescriptions[selectedNode?.id] || 'Loading description...'}
                                 </Typography>
-                                <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 2 }}>
-                                    <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
-                                        {unitTest}
-                                    </Typography>
-                                </Paper>
-                            </>
-                        )}
-                    </Box>
-                </ResizableBox>
-            </Drawer>
+                                <Typography variant="h6" gutterBottom>
+                                    Code:
+                                </Typography>
+                                <Box sx={{ height: 300, mb: 2 }}>
+                                    <CodeMirror
+                                        value={editedCode}
+                                        height="100%"
+                                        extensions={[javascript()]}
+                                        theme={oneDark} // Apply dark theme
+                                        onChange={(value) => setEditedCode(value)}
+                                    />
+                                </Box>
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    onClick={handleGenerateUnitTest}
+                                    sx={{ mb: 2 }}
+                                >
+                                    Generate Unit Test
+                                </Button>
+                                {unitTest && (
+                                    <>
+                                        <Typography variant="h6" gutterBottom>
+                                            Generated Unit Test:
+                                        </Typography>
+                                        <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 2 }}>
+                                            <Typography
+                                                variant="body2"
+                                                component="pre"
+                                                sx={{ whiteSpace: 'pre-wrap' }}
+                                            >
+                                                {unitTest}
+                                            </Typography>
+                                        </Paper>
+                                    </>
+                                )}
+                            </Box>
+                        </Box>
+                    </ResizableBox>
+                )}
+            </Box>
 
             {/* Directory Selection Dialog */}
             <Dialog

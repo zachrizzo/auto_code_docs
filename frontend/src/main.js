@@ -107,6 +107,15 @@ app.whenReady().then(() => {
 
 
 
+  ipcMain.handle('save-file', async (event, { filePath, content }) => {
+    try {
+      await fs.writeFile(filePath, content, 'utf-8');
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving file:', error);
+      return { success: false, error: error.message };
+    }
+  });
 
 
 

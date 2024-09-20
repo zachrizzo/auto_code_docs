@@ -94,7 +94,7 @@ async function processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, max
         for (const [id, declaration] of Object.entries(fileData.allDeclarations || {})) {
             if (nodes.length >= maxNodes) break;
             if (!nodeSet.has(id)) {
-                nodes.push(createNode(id, declaration.name, declaration.code || ''));
+                nodes.push(createNode(id, declaration.name, declaration.code || '', fileData.filePath));
                 nodeSet.add(id);
                 nodeMap.set(id, nodes.length - 1);
             }
@@ -137,13 +137,14 @@ function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
     });
 }
 
-function createNode(id, label, code) {
-    const isDuplicate = /\(\d+\)$/.test(label); // Check if label ends with (number)
+function createNode(id, label, code, filePath) {
+    const isDuplicate = /\(\d+\)$/.test(label);
     return {
         id,
         data: {
             label,
             code,
+            filePath, // Include the filePath here
             sourceHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-s-${suffix}` })),
             targetHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-t-${suffix}` })),
         },
@@ -155,6 +156,7 @@ function createNode(id, label, code) {
         } : {},
     };
 }
+
 
 function safeAddEdge(sourceId, targetId, options, edges, nodeSet) {
     if (nodeSet.has(sourceId) && nodeSet.has(targetId)) {
