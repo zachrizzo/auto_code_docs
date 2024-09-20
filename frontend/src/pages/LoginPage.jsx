@@ -1,6 +1,6 @@
 // src/components/Login.js
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import {
     TextField,
     Button,
@@ -24,8 +24,8 @@ import {
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { auth } from '../firebase/firebase';
-import { Canvas } from '@react-three/fiber';
-import NeuralParticleCloud from '../components/threeJS/NeuralParticleCloud';
+import { Canvas, } from '@react-three/fiber';
+import FractalLightDisplay from '../components/threeJS/FractalLightDisplay';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -97,9 +97,8 @@ const Login = () => {
                 overflow: 'hidden',
             }}
         >
-            {/* Neural Particle Cloud Background within Canvas */}
             <Canvas
-                camera={{ position: [0, 0, 10], fov: 60 }}
+                camera={{ position: [0, 0, 10], fov: 50 }}
                 style={{
                     position: 'absolute',
                     top: 0,
@@ -108,10 +107,21 @@ const Login = () => {
                     height: '100%',
                     zIndex: 0,
                 }}
+                gl={{
+                    antialias: true,
+                    alpha: true, // Enable transparency
+                    clearColor: '#00000000', // Fully transparent background
+                }}
             >
-                <ambientLight intensity={0.1} />
-                <NeuralParticleCloud particleCount={1500} connectionCount={7000} />
+                <Suspense fallback={null}>
+                    {/* Ambient Light for general illumination */}
+                    <ambientLight intensity={0.2} />
+
+                    {/* Colored Spotlights */}
+                    <FractalLightDisplay />
+                </Suspense>
             </Canvas>
+
 
             {/* Overlay to darken the canvas for better readability */}
             <Box
@@ -121,7 +131,7 @@ const Login = () => {
                     left: 0,
                     width: '100%',
                     height: '100%',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)', // Semi-transparent overlay
+                    // backgroundColor: 'rgba(0, 0, 0, 0.6)', // Adjust opacity as needed
                     zIndex: 1,
                 }}
             />
@@ -304,7 +314,7 @@ const Login = () => {
                     </Box>
                 </Paper>
             </Container>
-        </Box>
+        </Box >
     );
 
 };

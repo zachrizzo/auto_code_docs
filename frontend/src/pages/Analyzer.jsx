@@ -14,6 +14,8 @@ import {
     Tooltip,
     CircularProgress,
     Grid,
+    Drawer,
+    Divider,
 } from '@mui/material';
 import {
     FolderOpen as FolderOpenIcon,
@@ -21,6 +23,7 @@ import {
     ClearAll as ClearAllIcon,
     SwapHoriz as SwapHorizIcon,
     Search as SearchIcon,
+    Close as CloseIcon,
 } from '@mui/icons-material';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
 import CodeFlowChart from '../components/analyzer/mindMap/CodeMap';
@@ -28,9 +31,17 @@ import { getAIDescription, generateUnitTest } from '../api/CodeDocumentation';
 import NodeClickContext from '../contexts/NodeClickContext'; // Ensure the path is correct
 import { ReactFlowProvider } from 'reactflow';
 import { useTheme } from '@mui/material/styles';
-import { styled } from '@mui/system';
+import { ResizableBox } from 'react-resizable';
+import 'react-resizable/css/styles.css';
+
+// CodeMirror imports
+import CodeMirror from '@uiw/react-codemirror';
+import { javascript } from '@codemirror/lang-javascript';
 
 const { ipcRenderer } = window.electronAPI;
+
+const drawerMinWidth = 300;
+const drawerMaxWidth = 800;
 
 const Analyzer = () => {
     const [results, setResults] = useState({});
@@ -44,9 +55,9 @@ const Analyzer = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [editedCode, setEditedCode] = useState('');
     const [unitTest, setUnitTest] = useState('');
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [drawerWidth, setDrawerWidth] = useState(400);
     const theme = useTheme();
-
-    console.log(selectedNode);
 
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
@@ -59,12 +70,9 @@ const Analyzer = () => {
         try {
             const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir);
 
-            // Deserialize the received strings back to objects
             const parsedAnalysisResults = JSON.parse(analysisResults);
             const parsedGraphData = JSON.parse(graphData);
 
-            console.log('Analysis Results:', parsedAnalysisResults);
-            console.log('Graph Data:', parsedGraphData);
             setResults(parsedGraphData);
         } catch (error) {
             console.error('Renderer: Error during analysis:', error);
@@ -80,6 +88,7 @@ const Analyzer = () => {
         setSelectedNode(null);
         setEditedCode('');
         setUnitTest('');
+        setIsDrawerOpen(false);
     };
 
     const handleNodeClick = useCallback(
@@ -95,7 +104,6 @@ const Analyzer = () => {
                 return;
             }
 
-            // Fetch node data
             const nodeData = results.nodes.find((node) => node.id === nodeId);
 
             if (!nodeData) {
@@ -105,10 +113,11 @@ const Analyzer = () => {
             }
 
             if (!nodeData.data.code) {
-                // If no code, set default description
                 setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'No code available for this node.' }));
                 return;
             }
+            setSelectedNode({ id: nodeId, code: nodeData.data.code, label: nodeData.data.label });
+            setIsDrawerOpen(true);
 
             if (!aiDescriptions[nodeId]) {
                 try {
@@ -119,9 +128,8 @@ const Analyzer = () => {
                     setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'Failed to generate description.' }));
                 }
             }
-            setSelectedNode({ id: nodeId, code: nodeData.data.code, label: nodeData.data.label });
             setEditedCode(nodeData.data.code);
-            setUnitTest(''); // Reset unit test when a new node is selected
+            setUnitTest('');
         },
         [aiDescriptions, results]
     );
@@ -137,7 +145,6 @@ const Analyzer = () => {
 
     useEffect(() => {
         ipcRenderer.on('file-changed', (event, { filePath, content }) => {
-            console.log(`File changed: ${filePath}`);
             handleAnalyze();
         });
 
@@ -154,7 +161,6 @@ const Analyzer = () => {
             return;
         }
 
-        // Search for node
         const matchingNode = results.nodes?.find((node) =>
             node.data.label.toLowerCase().includes(searchQuery.toLowerCase())
         );
@@ -180,6 +186,10 @@ const Analyzer = () => {
         }
     };
 
+    const handleDrawerResize = (event, { size }) => {
+        setDrawerWidth(size.width);
+    };
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
             {/* Controls */}
@@ -190,6 +200,7 @@ const Analyzer = () => {
                     alignItems: 'center',
                     borderBottom: '1px solid',
                     borderColor: 'divider',
+                    backgroundColor: theme.palette.background.paper,
                 }}
             >
                 <Typography variant="h6" sx={{ flexGrow: 1 }}>
@@ -249,7 +260,7 @@ const Analyzer = () => {
 
             {/* Main Content */}
             <Grid container sx={{ flexGrow: 1 }}>
-                <Grid item xs={selectedNode ? 8 : 12} sx={{ height: '100%' }}>
+                <Grid item xs={12} sx={{ height: '100%' }}>
                     {isLoading ? (
                         <Box
                             sx={{
@@ -271,7 +282,7 @@ const Analyzer = () => {
                                             focusNodeId={focusNodeId}
                                         />
                                     ) : (
-                                        <Paper sx={{ height: '100%', overflowY: 'auto' }}>
+                                        <Paper sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
                                             <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
                                         </Paper>
                                     )}
@@ -280,53 +291,90 @@ const Analyzer = () => {
                         </ReactFlowProvider>
                     )}
                 </Grid>
-
-                {/* Details Panel */}
-                {selectedNode && (
-                    <Grid item xs={4} sx={{ height: '100%', borderLeft: '1px solid #ccc' }}>
-                        <Box sx={{ width: '100%', p: 2, height: '100%', overflowY: 'auto' }}>
-                            <Typography variant="h5" gutterBottom>
-                                {selectedNode.label}
-                            </Typography>
-                            <Typography variant="body1" gutterBottom>
-                                {aiDescriptions[selectedNode.id] || 'Loading description...'}
-                            </Typography>
-                            <Typography variant="h6" gutterBottom>
-                                Code:
-                            </Typography>
-                            <TextField
-                                multiline
-                                minRows={10}
-                                variant="outlined"
-                                fullWidth
-                                value={editedCode}
-                                onChange={(e) => setEditedCode(e.target.value)}
-                                sx={{ mb: 2 }}
-                            />
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={handleGenerateUnitTest}
-                                sx={{ mb: 2 }}
-                            >
-                                Generate Unit Test
-                            </Button>
-                            {unitTest && (
-                                <>
-                                    <Typography variant="h6" gutterBottom>
-                                        Generated Unit Test:
-                                    </Typography>
-                                    <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
-                                        <Typography variant="body2" component="pre">
-                                            {unitTest}
-                                        </Typography>
-                                    </Paper>
-                                </>
-                            )}
-                        </Box>
-                    </Grid>
-                )}
             </Grid>
+
+            {/* Details Drawer */}
+            <Drawer
+                anchor="right"
+                open={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                variant="persistent"
+                PaperProps={{
+                    sx: {
+                        width: drawerWidth,
+                        display: 'flex',
+                        flexDirection: 'column',
+                    },
+                }}
+            >
+                <ResizableBox
+                    width={drawerWidth}
+                    height={Infinity}
+                    minConstraints={[drawerMinWidth, 0]}
+                    maxConstraints={[drawerMaxWidth, Infinity]}
+                    axis="x"
+                    onResize={handleDrawerResize}
+                    handle={
+                        <Box
+                            sx={{
+                                width: '10px',
+                                cursor: 'col-resize',
+                                padding: '4px 0 0',
+                                borderTop: '1px solid #ddd',
+                                position: 'absolute',
+                                top: 0,
+                                right: 0,
+                                bottom: 0,
+                                zIndex: 100,
+                            }}
+                        />
+                    }
+                >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, borderBottom: '1px solid #ddd' }}>
+                        <Typography variant="h6">{selectedNode?.label}</Typography>
+                        <IconButton onClick={() => setIsDrawerOpen(false)}>
+                            <CloseIcon />
+                        </IconButton>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
+                        <Typography variant="body1" gutterBottom>
+                            {aiDescriptions[selectedNode?.id] || 'Loading description...'}
+                        </Typography>
+                        <Typography variant="h6" gutterBottom>
+                            Code:
+                        </Typography>
+                        <Box sx={{ height: 300, mb: 2 }}>
+                            <CodeMirror
+                                value={editedCode}
+                                height="100%"
+                                extensions={[javascript()]}
+                                onChange={(value) => setEditedCode(value)}
+                            />
+                        </Box>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleGenerateUnitTest}
+                            sx={{ mb: 2 }}
+                        >
+                            Generate Unit Test
+                        </Button>
+                        {unitTest && (
+                            <>
+                                <Typography variant="h6" gutterBottom>
+                                    Generated Unit Test:
+                                </Typography>
+                                <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 2 }}>
+                                    <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                                        {unitTest}
+                                    </Typography>
+                                </Paper>
+                            </>
+                        )}
+                    </Box>
+                </ResizableBox>
+            </Drawer>
 
             {/* Directory Selection Dialog */}
             <Dialog
