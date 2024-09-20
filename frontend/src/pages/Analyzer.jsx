@@ -1,24 +1,20 @@
 // Analyzer.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-    AppBar,
-    Toolbar,
+    Box,
     IconButton,
     Button,
-    Container,
     Typography,
-    Box,
     TextField,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    InputBase,
     Paper,
     Tooltip,
-    Grid,
-    useTheme,
     CircularProgress,
+    useTheme,
+    Drawer,
 } from '@mui/material';
 import {
     FolderOpen as FolderOpenIcon,
@@ -40,6 +36,7 @@ const Analyzer = () => {
     const [watchingDir, setWatchingDir] = useState('');
     const [viewMode, setViewMode] = useState('map');
     const [searchQuery, setSearchQuery] = useState('');
+    const [focusNodeId, setFocusNodeId] = useState(null);
     const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const theme = useTheme();
@@ -80,43 +77,14 @@ const Analyzer = () => {
         async (nodeId) => {
             setSelectedNode(nodeId);
 
-            if (!results || !Object.keys(results).length) {
+            if (!results || !results.nodes || !results.edges) {
                 console.error('Results data is not properly loaded.');
                 setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'Failed to load descriptions.' }));
                 return;
             }
 
-            let fileName, entityName, nodeData;
-
-            // Check if this is a file node
-            if (nodeId.startsWith('file-')) {
-                fileName = nodeId.substring(5); // Remove 'file-' prefix
-                entityName = 'file';
-            } else {
-                // This is a declaration node
-                // Find the file that contains this declaration
-                for (const [file, fileData] of Object.entries(results)) {
-                    if (fileData.allDeclarations && fileData.allDeclarations[nodeId]) {
-                        fileName = file;
-                        entityName = fileData.allDeclarations[nodeId].name;
-                        break;
-                    }
-                }
-            }
-
-            if (!fileName || !results[fileName]) {
-                console.error(`File not found for nodeId: ${nodeId}`);
-                setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'File data not found.' }));
-                return;
-            }
-
-            const fileResults = results[fileName];
-
-            if (entityName === 'file') {
-                nodeData = { name: fileName, code: fileResults.code || '' };
-            } else {
-                nodeData = fileResults.allDeclarations[nodeId];
-            }
+            // Fetch node data
+            const nodeData = results.nodes.find((node) => node.id === nodeId);
 
             if (!nodeData) {
                 console.error(`Node data not found for nodeId: ${nodeId}`);
@@ -126,7 +94,7 @@ const Analyzer = () => {
 
             if (!aiDescriptions[nodeId]) {
                 try {
-                    const description = await getAIDescription(nodeData.name, nodeData.code);
+                    const description = await getAIDescription(nodeData.data.label, nodeData.data.code || '');
                     setAIDescriptions((prev) => ({ ...prev, [nodeId]: description }));
                 } catch (error) {
                     console.error('Error fetching AI description:', error);
@@ -157,109 +125,152 @@ const Analyzer = () => {
         };
     }, [handleAnalyze]);
 
-    const filteredResults = searchQuery
-        ? Object.fromEntries(
-            Object.entries(results).filter(([key]) =>
-                key.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-        )
-        : results;
+    const handleSearch = (e) => {
+        e.preventDefault();
+
+        if (!searchQuery) {
+            setFocusNodeId(null);
+            return;
+        }
+
+        // Search for node
+        const matchingNode = results.nodes?.find((node) =>
+            node.data.label.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+
+        if (matchingNode) {
+            setFocusNodeId(matchingNode.id);
+        } else {
+            alert('Node not found');
+        }
+    };
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-            {/* AppBar with toolbar */}
-            <AppBar position="static">
-                <Toolbar>
-                    <Typography variant="h6" sx={{ flexGrow: 1 }}>
-                        Code Analyzer
-                    </Typography>
-                    <Tooltip title="Select Directory">
-                        <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
-                            <FolderOpenIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Analyze">
-                        <IconButton color="inherit" onClick={handleAnalyze} disabled={!watchingDir || isLoading}>
-                            <RefreshIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Clear Results">
-                        <IconButton color="inherit" onClick={clear}>
-                            <ClearAllIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Toggle View">
-                        <IconButton color="inherit" onClick={() => setViewMode(viewMode === 'map' ? 'tree' : 'map')}>
-                            <SwapHorizIcon />
-                        </IconButton>
-                    </Tooltip>
-                    <Paper
-                        component="form"
-                        sx={{ ml: 2, p: '2px 4px', display: 'flex', alignItems: 'center', width: 250 }}
+            {/* Controls */}
+            <Box
+                sx={{
+                    p: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                }}
+            >
+                <Typography variant="h6" sx={{ flexGrow: 1 }}>
+                    Code Analyzer
+                </Typography>
+                <Tooltip title="Select Directory">
+                    <IconButton color="primary" onClick={() => setIsDirectoryDialogOpen(true)}>
+                        <FolderOpenIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Analyze">
+                    <IconButton
+                        color="primary"
+                        onClick={handleAnalyze}
+                        disabled={!watchingDir || isLoading}
                     >
-                        <InputBase
-                            sx={{ ml: 1, flex: 1 }}
-                            placeholder="Search code..."
-                            inputProps={{ 'aria-label': 'search code' }}
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        <IconButton type="button" sx={{ p: '10px' }} aria-label="search">
-                            <SearchIcon />
-                        </IconButton>
-                    </Paper>
-                </Toolbar>
-            </AppBar>
+                        <RefreshIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Clear Results">
+                    <IconButton color="primary" onClick={clear}>
+                        <ClearAllIcon />
+                    </IconButton>
+                </Tooltip>
+                <Tooltip title="Toggle View">
+                    <IconButton
+                        color="primary"
+                        onClick={() => setViewMode(viewMode === 'map' ? 'tree' : 'map')}
+                    >
+                        <SwapHorizIcon />
+                    </IconButton>
+                </Tooltip>
+                <Paper
+                    component="form"
+                    onSubmit={handleSearch}
+                    sx={{
+                        ml: 2,
+                        p: '2px 4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: 250,
+                    }}
+                >
+                    <TextField
+                        variant="standard"
+                        placeholder="Search code..."
+                        inputProps={{ 'aria-label': 'search code' }}
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        sx={{ ml: 1, flex: 1 }}
+                    />
+                    <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
+                        <SearchIcon />
+                    </IconButton>
+                </Paper>
+            </Box>
 
             {/* Main Content */}
-            <Grid container sx={{ flexGrow: 1 }}>
-                {/* Left Panel: Graph or Tree View */}
-                <Grid item xs={12} md={8} sx={{ height: '100%', overflow: 'hidden' }}>
+            <Box sx={{ flexGrow: 1 }}>
+                {isLoading ? (
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100%',
+                        }}
+                    >
+                        <CircularProgress />
+                    </Box>
+                ) : (
                     <Box sx={{ height: '100%', p: 2 }}>
-                        {isLoading ? (
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    alignItems: 'center',
-                                    height: '100%',
-                                }}
-                            >
-                                <CircularProgress />
-                            </Box>
-                        ) : viewMode === 'map' ? (
-                            <CodeFlowChart data={filteredResults} onNodeClick={handleNodeClick} />
+                        {viewMode === 'map' ? (
+                            <CodeFlowChart
+                                data={results}
+                                onNodeClick={handleNodeClick}
+                                focusNodeId={focusNodeId}
+                            />
                         ) : (
                             <Paper sx={{ height: '100%', overflowY: 'auto' }}>
-                                <BorderedTreeView data={filteredResults} onNodeClick={handleNodeClick} />
+                                <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
                             </Paper>
                         )}
                     </Box>
-                </Grid>
+                )}
+            </Box>
 
-                {/* Right Panel: Selected Node Details */}
-                <Grid item xs={12} md={4} sx={{ height: '100%', borderLeft: `1px solid ${theme.palette.divider}` }}>
-                    <Box sx={{ p: 2, height: '100%', overflowY: 'auto' }}>
-                        {selectedNode ? (
-                            <>
-                                <Typography variant="h6" gutterBottom>
-                                    Details for: {selectedNode}
-                                </Typography>
-                                <Typography variant="body1">
-                                    {aiDescriptions[selectedNode] || 'Loading description...'}
-                                </Typography>
-                            </>
-                        ) : (
-                            <Typography variant="body1" color="textSecondary">
-                                Select a node to see details.
+            {/* Details Drawer */}
+            <Drawer
+                anchor="right"
+                open={Boolean(selectedNode)}
+                onClose={() => setSelectedNode(null)}
+            >
+                <Box sx={{ width: 350, p: 2 }}>
+                    {selectedNode ? (
+                        <>
+                            <Typography variant="h6" gutterBottom>
+                                Details for: {selectedNode}
                             </Typography>
-                        )}
-                    </Box>
-                </Grid>
-            </Grid>
+                            <Typography variant="body1">
+                                {aiDescriptions[selectedNode] || 'Loading description...'}
+                            </Typography>
+                        </>
+                    ) : (
+                        <Typography variant="body1" color="textSecondary">
+                            Select a node to see details.
+                        </Typography>
+                    )}
+                </Box>
+            </Drawer>
 
             {/* Directory Selection Dialog */}
-            <Dialog open={isDirectoryDialogOpen} onClose={() => setIsDirectoryDialogOpen(false)}>
+            <Dialog
+                open={isDirectoryDialogOpen}
+                onClose={() => setIsDirectoryDialogOpen(false)}
+            >
                 <DialogTitle>Select Directory to Analyze</DialogTitle>
                 <DialogContent>
                     <Typography variant="body2">

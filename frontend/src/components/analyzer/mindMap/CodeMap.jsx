@@ -7,6 +7,7 @@ import ReactFlow, {
     useNodesState,
     useEdgesState,
     addEdge,
+    useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ElkNode from './nodes/ElkNode';
@@ -23,7 +24,7 @@ const edgeTypes = {
     bidirectional: BidirectionalEdge,
 };
 
-function CodeFlowChart({ data, onNodeClick }) {
+function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +81,8 @@ function CodeFlowChart({ data, onNodeClick }) {
                 <Background />
                 <Controls />
                 <MiniMap />
+                {/* Use the FlowUpdater component here */}
+                <FlowUpdater focusNodeId={focusNodeId} />
             </ReactFlow>
             <Box position="absolute" top={10} left={10} zIndex={1000}>
                 <Typography variant="h6" component="div">
@@ -88,6 +91,24 @@ function CodeFlowChart({ data, onNodeClick }) {
             </Box>
         </Paper>
     );
+}
+
+function FlowUpdater({ focusNodeId }) {
+    const { setCenter, getNode } = useReactFlow();
+
+    useEffect(() => {
+        if (focusNodeId) {
+            const node = getNode(focusNodeId);
+            if (node && node.position) {
+                const x = node.position.x + (node.width || 0) / 2;
+                const y = node.position.y + (node.height || 0) / 2;
+                const zoom = 1.5;
+                setCenter(x, y, { zoom, duration: 500 });
+            }
+        }
+    }, [focusNodeId, getNode, setCenter]);
+
+    return null;
 }
 
 export default CodeFlowChart;
