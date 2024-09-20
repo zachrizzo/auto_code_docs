@@ -40,16 +40,18 @@ const createWindow = () => {
   });
 
   // Set Content Security Policy
+  // Set Content Security Policy
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:3000; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:3000 https://identitytoolkit.googleapis.com https://*.firebaseio.com https://www.googleapis.com"
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:3000; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:3000 http://127.0.0.1:8000 https://identitytoolkit.googleapis.com https://*.firebaseio.com https://www.googleapis.com"
         ]
       }
     });
   });
+
 
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);

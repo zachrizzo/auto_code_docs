@@ -1,4 +1,4 @@
-// CodeFlowChart.jsx
+// src/components/analyzer/mindMap/CodeMap.jsx
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactFlow, {
     Background,
@@ -24,10 +24,11 @@ const edgeTypes = {
     bidirectional: BidirectionalEdge,
 };
 
-function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
+function CodeFlowChart({ data, focusNodeId }) {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const { setCenter, getNode } = useReactFlow();
 
     const generateFlowElements = useCallback(() => {
         try {
@@ -41,7 +42,7 @@ function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
             console.error('Error generating flow elements:', error);
         }
         setIsLoading(false);
-    }, [data]);
+    }, [data, setNodes, setEdges]);
 
     useEffect(() => {
         if (data && (data.nodes || data.edges)) {
@@ -53,6 +54,18 @@ function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
         (params) => setEdges((eds) => addEdge(params, eds)),
         [setEdges]
     );
+
+    useEffect(() => {
+        if (focusNodeId) {
+            const node = getNode(focusNodeId);
+            if (node && node.position) {
+                const x = node.position.x;
+                const y = node.position.y;
+                const zoom = 1.5;
+                setCenter(x, y, { zoom, duration: 500 });
+            }
+        }
+    }, [focusNodeId, getNode, setCenter]);
 
     if (isLoading) {
         return (
@@ -70,7 +83,6 @@ function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
-                onNodeClick={(_, node) => onNodeClick(node.id)}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
@@ -81,8 +93,6 @@ function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
                 <Background />
                 <Controls />
                 <MiniMap />
-                {/* Use the FlowUpdater component here */}
-                <FlowUpdater focusNodeId={focusNodeId} />
             </ReactFlow>
             <Box position="absolute" top={10} left={10} zIndex={1000}>
                 <Typography variant="h6" component="div">
@@ -91,24 +101,6 @@ function CodeFlowChart({ data, onNodeClick, focusNodeId }) {
             </Box>
         </Paper>
     );
-}
-
-function FlowUpdater({ focusNodeId }) {
-    const { setCenter, getNode } = useReactFlow();
-
-    useEffect(() => {
-        if (focusNodeId) {
-            const node = getNode(focusNodeId);
-            if (node && node.position) {
-                const x = node.position.x + (node.width || 0) / 2;
-                const y = node.position.y + (node.height || 0) / 2;
-                const zoom = 1.5;
-                setCenter(x, y, { zoom, duration: 500 });
-            }
-        }
-    }, [focusNodeId, getNode, setCenter]);
-
-    return null;
 }
 
 export default CodeFlowChart;

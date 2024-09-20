@@ -1,9 +1,8 @@
-// Analyzer.jsx
+// src/pages/Analyzer.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     Box,
     IconButton,
-    Button,
     Typography,
     TextField,
     Dialog,
@@ -11,21 +10,25 @@ import {
     DialogContent,
     DialogActions,
     Paper,
+    Button,
     Tooltip,
     CircularProgress,
-    useTheme,
-    Drawer,
+    Grid,
 } from '@mui/material';
 import {
     FolderOpen as FolderOpenIcon,
-    Search as SearchIcon,
     Refresh as RefreshIcon,
     ClearAll as ClearAllIcon,
     SwapHoriz as SwapHorizIcon,
+    Search as SearchIcon,
 } from '@mui/icons-material';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
 import CodeFlowChart from '../components/analyzer/mindMap/CodeMap';
-import { getAIDescription } from '../api/CodeDocumentation';
+import { getAIDescription, generateUnitTest } from '../api/CodeDocumentation';
+import NodeClickContext from '../contexts/NodeClickContext'; // Ensure the path is correct
+import { ReactFlowProvider } from 'reactflow';
+import { useTheme } from '@mui/material/styles';
+import { styled } from '@mui/system';
 
 const { ipcRenderer } = window.electronAPI;
 
@@ -39,7 +42,11 @@ const Analyzer = () => {
     const [focusNodeId, setFocusNodeId] = useState(null);
     const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [editedCode, setEditedCode] = useState('');
+    const [unitTest, setUnitTest] = useState('');
     const theme = useTheme();
+
+    console.log(selectedNode);
 
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
@@ -71,11 +78,16 @@ const Analyzer = () => {
         setAIDescriptions({});
         setResults({});
         setSelectedNode(null);
+        setEditedCode('');
+        setUnitTest('');
     };
 
     const handleNodeClick = useCallback(
         async (nodeId) => {
-            setSelectedNode(nodeId);
+            if (!nodeId) {
+                console.error('No nodeId provided to handleNodeClick');
+                return;
+            }
 
             if (!results || !results.nodes || !results.edges) {
                 console.error('Results data is not properly loaded.');
@@ -92,15 +104,24 @@ const Analyzer = () => {
                 return;
             }
 
+            if (!nodeData.data.code) {
+                // If no code, set default description
+                setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'No code available for this node.' }));
+                return;
+            }
+
             if (!aiDescriptions[nodeId]) {
                 try {
-                    const description = await getAIDescription(nodeData.data.label, nodeData.data.code || '');
+                    const description = await getAIDescription(nodeData.data.label, nodeData.data.code);
                     setAIDescriptions((prev) => ({ ...prev, [nodeId]: description }));
                 } catch (error) {
                     console.error('Error fetching AI description:', error);
                     setAIDescriptions((prev) => ({ ...prev, [nodeId]: 'Failed to generate description.' }));
                 }
             }
+            setSelectedNode({ id: nodeId, code: nodeData.data.code, label: nodeData.data.label });
+            setEditedCode(nodeData.data.code);
+            setUnitTest(''); // Reset unit test when a new node is selected
         },
         [aiDescriptions, results]
     );
@@ -142,6 +163,20 @@ const Analyzer = () => {
             setFocusNodeId(matchingNode.id);
         } else {
             alert('Node not found');
+        }
+    };
+
+    const handleGenerateUnitTest = async () => {
+        if (!editedCode) {
+            alert('No code available to generate unit test.');
+            return;
+        }
+        try {
+            const test = await generateUnitTest(editedCode);
+            setUnitTest(test);
+        } catch (error) {
+            console.error('Error generating unit test:', error);
+            alert('Failed to generate unit test.');
         }
     };
 
@@ -213,58 +248,85 @@ const Analyzer = () => {
             </Box>
 
             {/* Main Content */}
-            <Box sx={{ flexGrow: 1 }}>
-                {isLoading ? (
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            height: '100%',
-                        }}
-                    >
-                        <CircularProgress />
-                    </Box>
-                ) : (
-                    <Box sx={{ height: '100%', p: 2 }}>
-                        {viewMode === 'map' ? (
-                            <CodeFlowChart
-                                data={results}
-                                onNodeClick={handleNodeClick}
-                                focusNodeId={focusNodeId}
-                            />
-                        ) : (
-                            <Paper sx={{ height: '100%', overflowY: 'auto' }}>
-                                <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
-                            </Paper>
-                        )}
-                    </Box>
-                )}
-            </Box>
-
-            {/* Details Drawer */}
-            <Drawer
-                anchor="right"
-                open={Boolean(selectedNode)}
-                onClose={() => setSelectedNode(null)}
-            >
-                <Box sx={{ width: 350, p: 2 }}>
-                    {selectedNode ? (
-                        <>
-                            <Typography variant="h6" gutterBottom>
-                                Details for: {selectedNode}
-                            </Typography>
-                            <Typography variant="body1">
-                                {aiDescriptions[selectedNode] || 'Loading description...'}
-                            </Typography>
-                        </>
+            <Grid container sx={{ flexGrow: 1 }}>
+                <Grid item xs={selectedNode ? 8 : 12} sx={{ height: '100%' }}>
+                    {isLoading ? (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                height: '100%',
+                            }}
+                        >
+                            <CircularProgress />
+                        </Box>
                     ) : (
-                        <Typography variant="body1" color="textSecondary">
-                            Select a node to see details.
-                        </Typography>
+                        <ReactFlowProvider>
+                            <NodeClickContext.Provider value={handleNodeClick}>
+                                <Box sx={{ height: '100%', p: 2 }}>
+                                    {viewMode === 'map' ? (
+                                        <CodeFlowChart
+                                            data={results}
+                                            focusNodeId={focusNodeId}
+                                        />
+                                    ) : (
+                                        <Paper sx={{ height: '100%', overflowY: 'auto' }}>
+                                            <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
+                                        </Paper>
+                                    )}
+                                </Box>
+                            </NodeClickContext.Provider>
+                        </ReactFlowProvider>
                     )}
-                </Box>
-            </Drawer>
+                </Grid>
+
+                {/* Details Panel */}
+                {selectedNode && (
+                    <Grid item xs={4} sx={{ height: '100%', borderLeft: '1px solid #ccc' }}>
+                        <Box sx={{ width: '100%', p: 2, height: '100%', overflowY: 'auto' }}>
+                            <Typography variant="h5" gutterBottom>
+                                {selectedNode.label}
+                            </Typography>
+                            <Typography variant="body1" gutterBottom>
+                                {aiDescriptions[selectedNode.id] || 'Loading description...'}
+                            </Typography>
+                            <Typography variant="h6" gutterBottom>
+                                Code:
+                            </Typography>
+                            <TextField
+                                multiline
+                                minRows={10}
+                                variant="outlined"
+                                fullWidth
+                                value={editedCode}
+                                onChange={(e) => setEditedCode(e.target.value)}
+                                sx={{ mb: 2 }}
+                            />
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={handleGenerateUnitTest}
+                                sx={{ mb: 2 }}
+                            >
+                                Generate Unit Test
+                            </Button>
+                            {unitTest && (
+                                <>
+                                    <Typography variant="h6" gutterBottom>
+                                        Generated Unit Test:
+                                    </Typography>
+                                    <Paper sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+                                        <Typography variant="body2" component="pre">
+                                            {unitTest}
+                                        </Typography>
+                                    </Paper>
+                                </>
+                            )}
+                        </Box>
+                    </Grid>
+                )}
+            </Grid>
 
             {/* Directory Selection Dialog */}
             <Dialog

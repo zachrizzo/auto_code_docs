@@ -1,5 +1,5 @@
-// ElkNode.jsx
-import React, { useState, useEffect } from 'react';
+// src/components/analyzer/mindMap/nodes/ElkNode.jsx
+import React, { useState, useEffect, useContext } from 'react';
 import { Handle, Position } from 'reactflow';
 import {
     Card,
@@ -12,21 +12,22 @@ import {
 } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import InfoIcon from '@mui/icons-material/Info';
 import { styled } from '@mui/system';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// Import icons for different node types
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ClassIcon from '@mui/icons-material/Class';
 import FunctionsIcon from '@mui/icons-material/Functions';
 
-// Import languages you want to support
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
 import javascript from 'react-syntax-highlighter/dist/esm/languages/prism/javascript';
 import python from 'react-syntax-highlighter/dist/esm/languages/prism/python';
 import java from 'react-syntax-highlighter/dist/esm/languages/prism/java';
 import clike from 'react-syntax-highlighter/dist/esm/languages/prism/clike';
+
+import NodeClickContext from '../../../../contexts/NodeClickContext'; // Adjust the path as necessary
 
 SyntaxHighlighter.registerLanguage('jsx', jsx);
 SyntaxHighlighter.registerLanguage('javascript', javascript);
@@ -34,7 +35,6 @@ SyntaxHighlighter.registerLanguage('python', python);
 SyntaxHighlighter.registerLanguage('java', java);
 SyntaxHighlighter.registerLanguage('clike', clike);
 
-// Simple language detection function
 function detectLanguage(code, fileName) {
     if (fileName) {
         if (fileName.endsWith('.js') || fileName.endsWith('.jsx')) return 'javascript';
@@ -42,12 +42,11 @@ function detectLanguage(code, fileName) {
         if (fileName.endsWith('.java')) return 'java';
     }
 
-    // Simple content-based detection
     if (code.includes('def ') && code.includes(':')) return 'python';
     if (code.includes('function') || code.includes('=>')) return 'javascript';
     if (code.includes('public class')) return 'java';
 
-    return 'clike'; // default to C-like syntax
+    return 'clike';
 }
 
 const ExpandMore = styled((props) => {
@@ -62,9 +61,10 @@ const ExpandMore = styled((props) => {
     }),
 }));
 
-function ElkNode({ data }) {
+function ElkNode({ id, data }) {
     const [expanded, setExpanded] = useState(false);
     const [language, setLanguage] = useState('javascript');
+    const handleNodeClick = useContext(NodeClickContext);
 
     useEffect(() => {
         if (data.code) {
@@ -73,7 +73,6 @@ function ElkNode({ data }) {
         }
     }, [data.code, data.fileName]);
 
-    // Determine node type and select icon
     let NodeIcon;
     if (data.nodeType === 'file') {
         NodeIcon = InsertDriveFileIcon;
@@ -82,22 +81,24 @@ function ElkNode({ data }) {
     } else if (data.nodeType === 'function') {
         NodeIcon = FunctionsIcon;
     } else {
-        NodeIcon = CodeIcon; // default icon
+        NodeIcon = CodeIcon;
     }
+
+    // Limit to one handle each
+    const sourceHandle = data.sourceHandles && data.sourceHandles.length > 0 ? data.sourceHandles[0] : null;
+    const targetHandle = data.targetHandles && data.targetHandles.length > 0 ? data.targetHandles[0] : null;
 
     return (
         <Box sx={{ position: 'relative', minWidth: 200 }}>
-            {/* Render Target Handles on the left */}
-            {data.targetHandles &&
-                data.targetHandles.map((handle, index) => (
-                    <Handle
-                        key={handle.id || index}
-                        type="target"
-                        position={Position.Left}
-                        id={handle.id}
-                        style={{ top: (index + 1) * 20, background: '#555' }}
-                    />
-                ))}
+            {/* Render Target Handle on the left */}
+            {targetHandle && (
+                <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={targetHandle.id}
+                    style={{ top: '50%', background: '#555' }}
+                />
+            )}
 
             <Card
                 variant="outlined"
@@ -113,6 +114,16 @@ function ElkNode({ data }) {
                         <Typography variant="subtitle1" component="div" noWrap>
                             {data.label}
                         </Typography>
+                        {/* Button to open the Drawer */}
+                        <Tooltip title="View Details">
+                            <IconButton
+                                size="small"
+                                onClick={() => handleNodeClick(id)}
+                                sx={{ ml: 1 }}
+                            >
+                                <InfoIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
                     </Box>
                     <Box display="flex" alignItems="center">
                         <Tooltip title={expanded ? 'Hide Code' : 'Show Code'}>
@@ -142,17 +153,15 @@ function ElkNode({ data }) {
                 </CardContent>
             </Card>
 
-            {/* Render Source Handles on the right */}
-            {data.sourceHandles &&
-                data.sourceHandles.map((handle, index) => (
-                    <Handle
-                        key={handle.id || index}
-                        type="source"
-                        position={Position.Right}
-                        id={handle.id}
-                        style={{ top: (index + 1) * 20, background: '#555' }}
-                    />
-                ))}
+            {/* Render Source Handle on the right */}
+            {sourceHandle && (
+                <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={sourceHandle.id}
+                    style={{ top: '50%', background: '#555' }}
+                />
+            )}
         </Box>
     );
 }
