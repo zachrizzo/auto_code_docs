@@ -9,6 +9,7 @@ import SignUp from './pages/SignUp.jsx';
 import { onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth methods
 import Login from './pages/LoginPage.jsx'
 import { auth } from './firebase/firebase.js'
+import Home from './pages/Home.jsx';
 
 
 const lightThemeColors = {
@@ -265,30 +266,8 @@ const darkTheme = createTheme({
 });
 
 
-function Home() {
-    const navigate = useNavigate();
 
-    const routeToAnalyzer = () => {
-        navigate('/analyze');
-    };
-    const routeToDatabaseManagement = () => {
-        navigate('/database');
-    };
 
-    return (
-        <Container>
-            <Typography variant="h2">Home</Typography>
-            <Stack gap={2}>
-                <Button variant="contained" color="primary" onClick={routeToAnalyzer}>
-                    Analyzer
-                </Button>
-                <Button variant="contained" color="primary" onClick={routeToDatabaseManagement}>
-                    Database Management
-                </Button>
-            </Stack>
-        </Container>
-    );
-}
 
 function App() {
     const [darkMode, setDarkMode] = useState(true);
@@ -342,7 +321,7 @@ function App() {
                 <Container>
                     <Routes>
                         {/* If user is logged in, show Home; otherwise, show Login */}
-                        <Route path="main_window" element={auth?.currentUser ? <Home /> : <Login />} />
+                        <Route path="/" element={auth?.currentUser ? <Home /> : <Login />} />
                         {/* Additional routes for other components */}
                         <Route path="analyze" element={<Analyzer />} />
                         <Route path="login" element={<Login />} />

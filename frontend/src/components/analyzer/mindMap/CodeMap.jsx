@@ -1,4 +1,4 @@
-// CodeFlowChart.js
+// CodeFlowChart.jsx
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactFlow, {
     Background,
@@ -9,85 +9,44 @@ import ReactFlow, {
     addEdge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import ElkNode from './nodes/ElkNode.jsx';
+import ElkNode from './nodes/ElkNode';
+import CustomEdge from './edges/CustomEdge';
+import BidirectionalEdge from './edges/BidirectionalEdge';
 import { Box, CircularProgress, Paper, Typography } from '@mui/material';
-import CustomEdge from './edges/CustomEdge.jsx';
-import BidirectionalEdge from './edges/BidirectionalEdge.js';
 
 const nodeTypes = {
     elk: ElkNode,
 };
+
 const edgeTypes = {
     custom: CustomEdge,
     bidirectional: BidirectionalEdge,
 };
-
-const BidirectionalArrowDefs = () => (
-    <svg>
-        <defs>
-            <marker
-                id="bidirectionalArrowEnd"
-                viewBox="-10 -10 20 20"
-                refX="15"
-                refY="0"
-                markerWidth="12"
-                markerHeight="12"
-                orient="auto"
-            >
-                <path d="M-10,-10 L0,0 L-10,10" fill="#00FF00" />
-            </marker>
-            <marker
-                id="bidirectionalArrowStart"
-                viewBox="-10 -10 20 20"
-                refX="-15"
-                refY="0"
-                markerWidth="12"
-                markerHeight="12"
-                orient="auto"
-            >
-                <path d="M10,-10 L0,0 L10,10" fill="#00FF00" />
-            </marker>
-        </defs>
-    </svg>
-);
 
 function CodeFlowChart({ data, onNodeClick }) {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [isLoading, setIsLoading] = useState(true);
 
-    const generateFlowElements = useCallback(async () => {
-        setIsLoading(true);
+    const generateFlowElements = useCallback(() => {
         try {
-            // Process your data prop here
-            const processedNodes = data.nodes.map(node => ({
-                id: node.id,
-                type: 'elk',
-                position: node.position || { x: 0, y: 0 },
-                data: { label: node.data.label, ...node.data }
-            }));
-
-            const processedEdges = data.edges.map(edge => ({
-                id: edge.id,
-                source: edge.source,
-                target: edge.target,
-                type: 'custom',
-                animated: edge.animated,
-                style: edge.style,
-                data: edge.data
-            }));
+            // Directly use nodes and edges from data
+            const processedNodes = data.nodes || [];
+            const processedEdges = data.edges || [];
 
             setNodes(processedNodes);
             setEdges(processedEdges);
         } catch (error) {
-            console.error("Error generating flow elements:", error);
+            console.error('Error generating flow elements:', error);
         }
         setIsLoading(false);
     }, [data]);
 
     useEffect(() => {
-        generateFlowElements();
-    }, [generateFlowElements]);
+        if (data && (data.nodes || data.edges)) {
+            generateFlowElements();
+        }
+    }, [data, generateFlowElements]);
 
     const onConnect = useCallback(
         (params) => setEdges((eds) => addEdge(params, eds)),
@@ -96,14 +55,14 @@ function CodeFlowChart({ data, onNodeClick }) {
 
     if (isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" height="700px">
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                 <CircularProgress />
             </Box>
         );
     }
 
     return (
-        <Paper elevation={3} sx={{ height: '700px', width: '100%' }}>
+        <Paper elevation={3} sx={{ height: '100%', width: '100%', position: 'relative' }}>
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -114,12 +73,13 @@ function CodeFlowChart({ data, onNodeClick }) {
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
+                minZoom={0.5}
+                maxZoom={2}
                 attributionPosition="top-right"
             >
                 <Background />
                 <Controls />
                 <MiniMap />
-                <BidirectionalArrowDefs />
             </ReactFlow>
             <Box position="absolute" top={10} left={10} zIndex={1000}>
                 <Typography variant="h6" component="div">

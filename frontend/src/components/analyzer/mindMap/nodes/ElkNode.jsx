@@ -1,13 +1,25 @@
-// ElkNode.js
+// ElkNode.jsx
 import React, { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
-import { Card, CardContent, Typography, IconButton, Box } from '@mui/material';
+import {
+    Card,
+    CardContent,
+    Typography,
+    IconButton,
+    Box,
+    Collapse,
+    Tooltip,
+} from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
-import InfoIcon from '@mui/icons-material/Info';
-import AspectRatioIcon from '@mui/icons-material/AspectRatio';
-import { useTheme } from '@mui/material/styles';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { styled } from '@mui/system';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
+// Import icons for different node types
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import ClassIcon from '@mui/icons-material/Class';
+import FunctionsIcon from '@mui/icons-material/Functions';
 
 // Import languages you want to support
 import jsx from 'react-syntax-highlighter/dist/esm/languages/prism/jsx';
@@ -38,13 +50,21 @@ function detectLanguage(code, fileName) {
     return 'clike'; // default to C-like syntax
 }
 
+const ExpandMore = styled((props) => {
+    const { expand, ...other } = props;
+    return <IconButton {...other} />;
+})(({ theme, expand }) => ({
+    transform: expand ? 'rotate(180deg)' : 'rotate(0deg)',
+    marginLeft: 'auto',
+    padding: '4px',
+    transition: theme.transitions.create('transform', {
+        duration: theme.transitions.duration.shortest,
+    }),
+}));
+
 function ElkNode({ data }) {
     const [expanded, setExpanded] = useState(false);
-    const [showInfo, setShowInfo] = useState(false);
-    const [resizing, setResizing] = useState(false);
     const [language, setLanguage] = useState('javascript');
-
-    const theme = useTheme();
 
     useEffect(() => {
         if (data.code) {
@@ -53,71 +73,86 @@ function ElkNode({ data }) {
         }
     }, [data.code, data.fileName]);
 
+    // Determine node type and select icon
+    let NodeIcon;
+    if (data.nodeType === 'file') {
+        NodeIcon = InsertDriveFileIcon;
+    } else if (data.nodeType === 'class') {
+        NodeIcon = ClassIcon;
+    } else if (data.nodeType === 'function') {
+        NodeIcon = FunctionsIcon;
+    } else {
+        NodeIcon = CodeIcon; // default icon
+    }
+
     return (
-        <Box sx={{ position: 'relative', minWidth: 150, maxHeight: 150 }} >
-            <Box
+        <Box sx={{ position: 'relative', minWidth: 200 }}>
+            {/* Render Target Handles on the left */}
+            {data.targetHandles &&
+                data.targetHandles.map((handle, index) => (
+                    <Handle
+                        key={handle.id || index}
+                        type="target"
+                        position={Position.Left}
+                        id={handle.id}
+                        style={{ top: (index + 1) * 20, background: '#555' }}
+                    />
+                ))}
+
+            <Card
+                variant="outlined"
                 sx={{
-                    position: 'absolute',
-                    top: -20,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    backgroundColor: theme.palette.background.paper,
-                    borderRadius: '16px',
-                    padding: '4px',
-                    boxShadow: theme.shadows[2],
-                    zIndex: 1,
+                    borderRadius: 2,
+                    boxShadow: 3,
+                    backgroundColor: 'background.paper',
                 }}
             >
-                <IconButton size="small" onClick={() => setExpanded(!expanded)}>
-                    <CodeIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" onClick={() => setShowInfo(!showInfo)}>
-                    <InfoIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" onClick={() => setResizing(!resizing)}>
-                    <AspectRatioIcon fontSize="small" />
-                </IconButton>
-            </Box>
-            <Card variant="outlined" sx={{ width: '100%' }}>
-                <CardContent>
-                    <div className="handles targets">
-                        {data.targetHandles.map((handle) => (
-                            <Handle
-                                key={handle.id}
-                                id={handle.id}
-                                type="target"
-                                position={Position.Left}
-                            />
-                        ))}
-                    </div>
-                    <Typography variant="h6" component="div">
-                        {data.label}
-                    </Typography>
-                    {expanded && (
-                        <Box sx={{ mt: 1 }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                        <NodeIcon color="primary" sx={{ mr: 1 }} />
+                        <Typography variant="subtitle1" component="div" noWrap>
+                            {data.label}
+                        </Typography>
+                    </Box>
+                    <Box display="flex" alignItems="center">
+                        <Tooltip title={expanded ? 'Hide Code' : 'Show Code'}>
+                            <IconButton size="small" onClick={() => setExpanded(!expanded)}>
+                                <CodeIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                        <Typography variant="caption" color="textSecondary">
+                            {expanded ? 'Hide Code' : 'Show Code'}
+                        </Typography>
+                        <ExpandMore
+                            expand={expanded}
+                            onClick={() => setExpanded(!expanded)}
+                            aria-expanded={expanded}
+                            aria-label="show more"
+                        >
+                            <ExpandMoreIcon />
+                        </ExpandMore>
+                    </Box>
+                    <Collapse in={expanded} timeout="auto" unmountOnExit>
+                        <Box mt={2}>
                             <SyntaxHighlighter language={language} style={oneDark}>
                                 {data.code || 'No code available'}
                             </SyntaxHighlighter>
                         </Box>
-                    )}
-                    {showInfo && (
-                        <Typography variant="body2" sx={{ mt: 1 }}>
-                            {data.info || 'No additional information available'}
-                        </Typography>
-                    )}
-                    <div className="handles sources">
-                        {data.sourceHandles.map((handle) => (
-                            <Handle
-                                key={handle.id}
-                                id={handle.id}
-                                type="source"
-                                position={Position.Right}
-                            />
-                        ))}
-                    </div>
+                    </Collapse>
                 </CardContent>
             </Card>
+
+            {/* Render Source Handles on the right */}
+            {data.sourceHandles &&
+                data.sourceHandles.map((handle, index) => (
+                    <Handle
+                        key={handle.id || index}
+                        type="source"
+                        position={Position.Right}
+                        id={handle.id}
+                        style={{ top: (index + 1) * 20, background: '#555' }}
+                    />
+                ))}
         </Box>
     );
 }
