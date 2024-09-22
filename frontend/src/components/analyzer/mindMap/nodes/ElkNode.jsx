@@ -84,6 +84,11 @@ function ElkNode({ id, data }) {
         NodeIcon = CodeIcon;
     }
 
+    // Handle anonymous function names
+    const displayName = data.label.startsWith('anonymous_')
+        ? data.label.slice(0, 13) + '...'
+        : data.label;
+
     // Limit to one handle each
     const sourceHandle = data.sourceHandles && data.sourceHandles.length > 0 ? data.sourceHandles[0] : null;
     const targetHandle = data.targetHandles && data.targetHandles.length > 0 ? data.targetHandles[0] : null;
@@ -112,7 +117,7 @@ function ElkNode({ id, data }) {
                     <Box display="flex" alignItems="center" mb={1}>
                         <NodeIcon color="primary" sx={{ mr: 1 }} />
                         <Typography variant="subtitle1" component="div" noWrap>
-                            {data.label}
+                            {displayName}
                         </Typography>
                         {/* Button to open the Drawer */}
                         <Tooltip title="View Details">
