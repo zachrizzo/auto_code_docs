@@ -155,7 +155,12 @@ async function processChunk(
 function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
     const addEdge = (source, target, type) => {
         if (edges.length < maxEdges && nodeSet.has(source) && nodeSet.has(target)) {
-            safeAddEdge(source, target, { type }, edges, nodeSet);
+            // For call and crossFileCall, we'll reverse the source and target
+            if (type === 'call' || type === 'crossFileCall') {
+                safeAddEdge(target, source, { type }, edges, nodeSet);
+            } else {
+                safeAddEdge(source, target, { type }, edges, nodeSet);
+            }
         }
     };
 
@@ -253,7 +258,7 @@ function getEdgeColor(type) {
         case 'codependent':
             return '#00FF00'; // Green
         default:
-            return '#0000FF'; // Blue for declaration or others
+            return '#FFFFFFFF'; // Black
     }
 }
 
