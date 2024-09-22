@@ -10,18 +10,25 @@ import ReactFlow, {
     useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import ElkNode from './nodes/ElkNode';
-import CustomEdge from './edges/CustomEdge';
-import BidirectionalEdge from './edges/BidirectionalEdge';
-import { Box, CircularProgress, Paper, Typography } from '@mui/material';
+import ElkNode from '../mindMap/nodes/ElkNode';
+import {
+    DeclarationEdge,
+    CallEdge,
+    CrossFileCallEdge,
+    CodependentEdge,
+} from '../mindMap/edges/CustomEdges'; // Import custom edges
+import { Box, CircularProgress, Paper } from '@mui/material';
 
 const nodeTypes = {
     elk: ElkNode,
 };
 
 const edgeTypes = {
-    custom: CustomEdge,
-    bidirectional: BidirectionalEdge,
+    declaration: DeclarationEdge,
+    call: CallEdge,
+    crossFileCall: CrossFileCallEdge,
+    codependent: CodependentEdge,
+    // Add more custom edge types if needed
 };
 
 function CodeFlowChart({ data, focusNodeId }) {
@@ -47,6 +54,8 @@ function CodeFlowChart({ data, focusNodeId }) {
     useEffect(() => {
         if (data && (data.nodes || data.edges)) {
             generateFlowElements();
+        } else {
+            setIsLoading(false);
         }
     }, [data, generateFlowElements]);
 
@@ -59,8 +68,8 @@ function CodeFlowChart({ data, focusNodeId }) {
         if (focusNodeId) {
             const node = getNode(focusNodeId);
             if (node && node.position) {
-                const x = node.position.x;
-                const y = node.position.y;
+                const x = node.position.x + node.width / 2 || 0;
+                const y = node.position.y + node.height / 2 || 0;
                 const zoom = 1.5;
                 setCenter(x, y, { zoom, duration: 500 });
             }
@@ -69,14 +78,22 @@ function CodeFlowChart({ data, focusNodeId }) {
 
     if (isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+            <Box
+                display="flex"
+                justifyContent="center"
+                alignItems="center"
+                height="100%"
+            >
                 <CircularProgress />
             </Box>
         );
     }
 
     return (
-        <Paper elevation={3} sx={{ height: '100%', width: '100%', position: 'relative' }}>
+        <Paper
+            elevation={3}
+            sx={{ height: '100%', width: '100%', position: 'relative' }}
+        >
             <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -86,13 +103,52 @@ function CodeFlowChart({ data, focusNodeId }) {
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 fitView
-                minZoom={0.5}
-                maxZoom={2}
+                minZoom={0.1}
+                maxZoom={4}
                 attributionPosition="top-right"
             >
                 <Background />
                 <Controls />
-                <MiniMap />
+                <MiniMap nodeStrokeColor={(n) => {
+                    if (n.style?.backgroundColor) return n.style.backgroundColor;
+                    return '#eee';
+                }} />
+                {/* Define arrow markers */}
+                <defs>
+                    <marker
+                        id="arrowclosed"
+                        viewBox="0 -5 10 10"
+                        refX="10"
+                        refY="0"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                    >
+                        <path d="M0,-5L10,0L0,5" fill="#000" />
+                    </marker>
+                    <marker
+                        id="bidirectionalArrowEnd"
+                        viewBox="0 -5 10 10"
+                        refX="10"
+                        refY="0"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                    >
+                        <path d="M0,-5L10,0L0,5" fill="#000" />
+                    </marker>
+                    <marker
+                        id="bidirectionalArrowStart"
+                        viewBox="10 -5 10 10"
+                        refX="0"
+                        refY="0"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto-start-reverse"
+                    >
+                        <path d="M10,-5L0,0L10,5" fill="#000" />
+                    </marker>
+                </defs>
             </ReactFlow>
         </Paper>
     );
