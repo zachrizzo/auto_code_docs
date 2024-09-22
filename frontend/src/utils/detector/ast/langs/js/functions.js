@@ -5,18 +5,27 @@ class JavaScriptFunctionHandler {
         this.astAnalyzer = astAnalyzer;
     }
 
-    handleNode(node, parentPath, parentId) {
+    handleNode(node, parentPath, parentId, startPosition, endPosition, nodeType) {
         const functionName = this.getFunctionName(node);
 
         // Handle anonymous functions by assigning a unique name
         let name = functionName;
         if (!name || name === 'anonymous') {
             name = `anonymous_${this.astAnalyzer.getUniqueId(node.text)}`;
+
         }
 
         if (this.shouldProcessFunction(name)) {
             const path = `${parentPath}${name}`;
-            const id = this.astAnalyzer.addDeclaration(name, this.getFunctionType(node), path, node.text);
+            const id = this.astAnalyzer.addDeclaration(
+                name,
+                this.getFunctionType(node),
+                path,
+                node.text,
+                startPosition,
+                endPosition,
+                nodeType
+            );
 
             if (id) {
                 if (parentId) {

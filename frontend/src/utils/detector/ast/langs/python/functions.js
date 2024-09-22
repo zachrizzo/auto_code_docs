@@ -3,13 +3,22 @@ class FunctionHandler {
         this.astAnalyzer = astAnalyzer;
     }
 
-    handleNode(node, parentPath, parentId) {
+    handleNode(node, parentPath, parentId, nodeType) {
         const functionName = this.getFunctionName(node);
+        const startPosition = node.startPosition;
+        const endPosition = node.endPosition;
 
-        // Handle anonymous functions and name them later if needed
         if (functionName && functionName !== 'anonymous' && this.shouldProcessFunction(functionName)) {
             const path = `${parentPath}${functionName}`;
-            const id = this.astAnalyzer.addDeclaration(functionName, this.getFunctionType(node), path, node.text);
+            const id = this.astAnalyzer.addDeclaration(
+                functionName,
+                this.getFunctionType(node),
+                path,
+                node.text,
+                startPosition,
+                endPosition,
+                nodeType
+            );
 
             if (id) {
                 if (parentId) {
@@ -17,6 +26,9 @@ class FunctionHandler {
                 }
 
                 this.astAnalyzer.processedFunctions.add(functionName);
+
+                // Traverse the function body to detect nested functions and function calls
+                this.traverseFunctionBody(node, path, id);
 
                 return id;
             }
@@ -97,12 +109,13 @@ class FunctionHandler {
                 do {
                     const childNode = cursor.currentNode;
                     if (this.astAnalyzer.isFunctionNode(childNode.type)) {
-                        this.handleNode(childNode, path, functionId);
+                        this.handleNode(childNode, path, functionId, childNode.type);
                     }
                 } while (cursor.gotoNextSibling());
             }
         }
     }
+
 }
 
 export default FunctionHandler;

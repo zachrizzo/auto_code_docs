@@ -5,7 +5,7 @@ class JuliaFunctionHandler {
         this.astAnalyzer = astAnalyzer;
     }
 
-    handleNode(node, parentPath, parentId) {
+    handleNode(node, parentPath, parentId, startPosition, endPosition, nodeType) {
         const functionName = this.getFunctionName(node);
         const functionType = this.getFunctionType(node);
 
@@ -17,7 +17,15 @@ class JuliaFunctionHandler {
 
         if (this.shouldProcessFunction(name)) {
             const path = `${parentPath}${name}`;
-            const id = this.astAnalyzer.addDeclaration(name, functionType, path, node.text);
+            const id = this.astAnalyzer.addDeclaration(
+                name,
+                functionType,
+                path,
+                node.text,
+                startPosition,
+                endPosition,
+                nodeType
+            );
 
             if (id) {
                 if (parentId) {

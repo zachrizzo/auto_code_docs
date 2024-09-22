@@ -329,7 +329,7 @@ function App() {
                     <Route
                         path="analyze"
                         element={
-                            <Box sx={{ width: '100vw', height: '100vh', p: 0 }}>
+                            <Box sx={{ width: '100vw', height: '93vh', p: 0 }}>
                                 <Analyzer />
                             </Box>
                         }

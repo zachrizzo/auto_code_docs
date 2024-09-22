@@ -216,12 +216,11 @@ class ASTDetectionHandler {
         }
     }
 
-    addDeclaration(name, type, path, code) {
+    addDeclaration(name, type, path, code, startPosition, endPosition, nodeType) {
         if (!this.isInWatchedDir(this.currentFile) || this.importedModules.has(name)) {
             return null;
         }
 
-        // Generate a unique ID for the function based on its code content
         const codeHash = this.getUniqueId(code);
         const id = `${codeHash}-${this.currentFile}-${name}`;
 
@@ -237,17 +236,19 @@ class ASTDetectionHandler {
 
         const declaration = {
             id,
-            name, // Use updated name for display
+            name,
             type,
             path,
             code,
             analysisId: this.currentAnalysisId,
-            file: this.currentFile
+            file: this.currentFile,
+            startPosition,
+            endPosition,
+            nodeType,
         };
 
         this.results.allDeclarations[id] = declaration;
 
-        // **Update globalFunctionNameToId**
         if (!this.globalFunctionNameToId[name]) {
             this.globalFunctionNameToId[name] = [];
         }
@@ -321,13 +322,15 @@ class ASTDetectionHandler {
                     cursor.gotoParent();
                 }
             } else if (isFunction || isClass) {
+                const startPosition = node.startPosition;
+                const endPosition = node.endPosition;
                 if (isFunction) {
-                    const functionId = this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    const functionId = this.functionHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1], startPosition, endPosition, nodeType);
                     currentNodeId = functionId;
                     this.parentStack.push(functionId);
                 }
                 if (isClass) {
-                    const classId = this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1]);
+                    const classId = this.classHandler.handleNode(node, parentPath, this.parentStack[this.parentStack.length - 1], startPosition, endPosition, nodeType);
                     currentNodeId = classId;
                     this.parentStack.push(classId);
                 }

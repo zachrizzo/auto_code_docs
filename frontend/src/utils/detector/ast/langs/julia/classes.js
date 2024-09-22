@@ -5,13 +5,22 @@ class JuliaClassHandler {
         this.astAnalyzer = astAnalyzer;
     }
 
-    handleNode(node, parentPath, parentId) {
+    handleNode(node, parentPath, parentId, startPosition, endPosition, nodeType) {
         const className = this.getClassName(node);
         const classType = this.getClassType(node);
 
         if (className && this.shouldProcessClass(className)) {
             const path = `${parentPath}${className}`;
-            const id = this.astAnalyzer.addDeclaration(className, classType, path, node.text);
+            const id = this.astAnalyzer.addDeclaration(
+                className,
+                classType,
+                path,
+                node.text,
+                startPosition,
+                endPosition,
+                nodeType
+            );
+
 
             if (id) {
                 if (parentId) {

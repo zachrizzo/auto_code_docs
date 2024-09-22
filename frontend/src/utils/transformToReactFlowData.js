@@ -86,7 +86,7 @@ async function processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, max
 
         const fileNodeId = `file-${getFileName(fileName)}`;
         if (!nodeSet.has(fileNodeId)) {
-            nodes.push(createNode(fileNodeId, getFileName(fileName)));
+            nodes.push(createNode(fileNodeId, getFileName(fileName), '', fileName, null, null));
             nodeSet.add(fileNodeId);
             nodeMap.set(fileNodeId, nodes.length - 1);
         }
@@ -94,7 +94,14 @@ async function processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, max
         for (const [id, declaration] of Object.entries(fileData.allDeclarations || {})) {
             if (nodes.length >= maxNodes) break;
             if (!nodeSet.has(id)) {
-                nodes.push(createNode(id, declaration.name, declaration.code || '', fileData.filePath));
+                nodes.push(createNode(
+                    id,
+                    declaration.name,
+                    declaration.code || '',
+                    fileName,
+                    declaration.startPosition, // Pass startPosition
+                    declaration.endPosition    // Pass endPosition
+                ));
                 nodeSet.add(id);
                 nodeMap.set(id, nodes.length - 1);
             }
@@ -103,6 +110,8 @@ async function processChunk(chunk, nodes, edges, nodeSet, nodeMap, maxNodes, max
         processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges);
     }
 }
+
+
 
 function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
     const addEdge = (source, target, type) => {
@@ -137,16 +146,19 @@ function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
     });
 }
 
-function createNode(id, label, code, filePath, start, end) {
-    const isDuplicate = /\(\d+\)$/.test(label);
+/// transformToReactFlowData.js
+
+
+function createNode(id, label, code, filePath, startPosition, endPosition) {
+    const isDuplicate = /\(\d+\)$/.test(label); // Check if label ends with (number)
     return {
         id,
         data: {
             label,
             code,
-            filePath,
-            start, // Add start position
-            end,   // Add end position
+            filePath: filePath || '',
+            startPosition, // Include startPosition
+            endPosition,   // Include endPosition
             sourceHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-s-${suffix}` })),
             targetHandles: ['a', 'b', 'c'].map(suffix => ({ id: `${id}-t-${suffix}` })),
         },
@@ -158,6 +170,7 @@ function createNode(id, label, code, filePath, start, end) {
         } : {},
     };
 }
+
 
 
 

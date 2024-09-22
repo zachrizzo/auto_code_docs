@@ -3,12 +3,22 @@ class ClassHandler {
         this.astAnalyzer = astAnalyzer;
     }
 
-    handleNode(node, parentPath, parentId) {
+    handleNode(node, parentPath, parentId, startPosition, endPosition, nodeType) {
+
         const className = this.getClassName(node);
 
         if (className && this.shouldProcessClass(className)) {
             const path = `${parentPath}${className}`;
-            const id = this.astAnalyzer.addDeclaration(className, this.getClassType(node), path, node.text);
+            const id = this.astAnalyzer.addDeclaration(
+                name,
+                this.getFunctionType(node),
+                path,
+                node.text,
+                startPosition,
+                endPosition,
+                nodeType
+            );
+
 
             if (id) {
                 if (parentId) {
