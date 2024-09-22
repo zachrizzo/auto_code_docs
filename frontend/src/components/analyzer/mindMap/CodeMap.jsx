@@ -68,8 +68,9 @@ function CodeFlowChart({ data, focusNodeId }) {
         if (focusNodeId) {
             const node = getNode(focusNodeId);
             if (node && node.position) {
-                const x = node.position.x + node.width / 2 || 0;
-                const y = node.position.y + node.height / 2 || 0;
+                // Avoid using node.width and node.height directly as they might be undefined
+                const x = node.position.x || 0;
+                const y = node.position.y || 0;
                 const zoom = 1.5;
                 setCenter(x, y, { zoom, duration: 500 });
             }
@@ -149,6 +150,7 @@ function CodeFlowChart({ data, focusNodeId }) {
                         <path d="M10,-5L0,0L10,5" fill="#000" />
                     </marker>
                 </defs>
+
             </ReactFlow>
         </Paper>
     );

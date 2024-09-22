@@ -89,21 +89,15 @@ function ElkNode({ id, data }) {
         ? data.label.slice(0, 13) + '...'
         : data.label;
 
-    // Limit to one handle each
-    const sourceHandle = data.sourceHandles && data.sourceHandles.length > 0 ? data.sourceHandles[0] : null;
-    const targetHandle = data.targetHandles && data.targetHandles.length > 0 ? data.targetHandles[0] : null;
-
     return (
         <Box sx={{ position: 'relative', minWidth: 200 }}>
             {/* Render Target Handle on the left */}
-            {targetHandle && (
-                <Handle
-                    type="target"
-                    position={Position.Left}
-                    id={targetHandle.id}
-                    style={{ top: '50%', background: '#555' }}
-                />
-            )}
+            <Handle
+                type="target"
+                position={Position.Left}
+                id="target" // Single target handle
+                style={{ top: '50%', background: '#555' }}
+            />
 
             <Card
                 variant="outlined"
@@ -159,14 +153,12 @@ function ElkNode({ id, data }) {
             </Card>
 
             {/* Render Source Handle on the right */}
-            {sourceHandle && (
-                <Handle
-                    type="source"
-                    position={Position.Right}
-                    id={sourceHandle.id}
-                    style={{ top: '50%', background: '#555' }}
-                />
-            )}
+            <Handle
+                type="source"
+                position={Position.Right}
+                id="source" // Single source handle
+                style={{ top: '50%', background: '#555' }}
+            />
         </Box>
     );
 }

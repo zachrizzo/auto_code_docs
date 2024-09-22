@@ -1,8 +1,6 @@
-// CustomEdges.js
+// src/components/analyzer/mindMap/edges/CustomEdges.jsx
 import React from 'react';
-import { Position, getBezierPath } from '@xyflow/react';
-
-const foreignObjectSize = 40;
+import { getBezierPath, EdgeText } from 'reactflow';
 
 export const DeclarationEdge = ({
     id,
@@ -15,7 +13,19 @@ export const DeclarationEdge = ({
     style = {},
     data,
 }) => {
-    const edgePath = getBezierPath({
+    // Validate coordinates
+    if (
+        typeof sourceX !== 'number' ||
+        typeof sourceY !== 'number' ||
+        typeof targetX !== 'number' ||
+        typeof targetY !== 'number'
+    ) {
+        console.error(`Invalid coordinates for edge ${id}:`, { sourceX, sourceY, targetX, targetY });
+        return null; // Prevent rendering this edge
+    }
+
+    // Generate Bezier path
+    const [edgePath, labelX, labelY] = getBezierPath({
         sourceX,
         sourceY,
         targetX,
@@ -23,6 +33,14 @@ export const DeclarationEdge = ({
         sourcePosition,
         targetPosition,
     });
+
+    // Validate edge path
+    if (!edgePath || edgePath.trim() === '') {
+        console.error(`Empty edge path for edge ${id}`);
+        return null;
+    }
+
+    console.log(`DeclarationEdge Path for ${id}: ${edgePath}`);
 
     return (
         <>
@@ -42,6 +60,8 @@ export const DeclarationEdge = ({
     );
 };
 
+// Repeat similar structure for CallEdge, CrossFileCallEdge, CodependentEdge
+
 export const CallEdge = ({
     id,
     sourceX,
@@ -53,7 +73,19 @@ export const CallEdge = ({
     style = {},
     data,
 }) => {
-    const edgePath = getBezierPath({
+    // Validate coordinates
+    if (
+        typeof sourceX !== 'number' ||
+        typeof sourceY !== 'number' ||
+        typeof targetX !== 'number' ||
+        typeof targetY !== 'number'
+    ) {
+        console.error(`Invalid coordinates for edge ${id}:`, { sourceX, sourceY, targetX, targetY });
+        return null; // Prevent rendering this edge
+    }
+
+    // Generate Bezier path
+    const [edgePath, labelX, labelY] = getBezierPath({
         sourceX,
         sourceY,
         targetX,
@@ -61,6 +93,14 @@ export const CallEdge = ({
         sourcePosition,
         targetPosition,
     });
+
+    // Validate edge path
+    if (!edgePath || edgePath.trim() === '') {
+        console.error(`Empty edge path for edge ${id}`);
+        return null;
+    }
+
+    console.log(`CallEdge Path for ${id}: ${edgePath}`);
 
     return (
         <>
@@ -91,7 +131,19 @@ export const CrossFileCallEdge = ({
     style = {},
     data,
 }) => {
-    const edgePath = getBezierPath({
+    // Validate coordinates
+    if (
+        typeof sourceX !== 'number' ||
+        typeof sourceY !== 'number' ||
+        typeof targetX !== 'number' ||
+        typeof targetY !== 'number'
+    ) {
+        console.error(`Invalid coordinates for edge ${id}:`, { sourceX, sourceY, targetX, targetY });
+        return null; // Prevent rendering this edge
+    }
+
+    // Generate Bezier path
+    const [edgePath, labelX, labelY] = getBezierPath({
         sourceX,
         sourceY,
         targetX,
@@ -99,6 +151,14 @@ export const CrossFileCallEdge = ({
         sourcePosition,
         targetPosition,
     });
+
+    // Validate edge path
+    if (!edgePath || edgePath.trim() === '') {
+        console.error(`Empty edge path for edge ${id}`);
+        return null;
+    }
+
+    console.log(`CrossFileCallEdge Path for ${id}: ${edgePath}`);
 
     return (
         <>
@@ -129,7 +189,19 @@ export const CodependentEdge = ({
     style = {},
     data,
 }) => {
-    const edgePath = getBezierPath({
+    // Validate coordinates
+    if (
+        typeof sourceX !== 'number' ||
+        typeof sourceY !== 'number' ||
+        typeof targetX !== 'number' ||
+        typeof targetY !== 'number'
+    ) {
+        console.error(`Invalid coordinates for edge ${id}:`, { sourceX, sourceY, targetX, targetY });
+        return null; // Prevent rendering this edge
+    }
+
+    // Generate Bezier path
+    const [edgePath, labelX, labelY] = getBezierPath({
         sourceX,
         sourceY,
         targetX,
@@ -137,6 +209,14 @@ export const CodependentEdge = ({
         sourcePosition,
         targetPosition,
     });
+
+    // Validate edge path
+    if (!edgePath || edgePath.trim() === '') {
+        console.error(`Empty edge path for edge ${id}`);
+        return null;
+    }
+
+    console.log(`CodependentEdge Path for ${id}: ${edgePath}`);
 
     return (
         <>
