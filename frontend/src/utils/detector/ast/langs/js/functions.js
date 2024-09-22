@@ -8,12 +8,20 @@ class JavaScriptFunctionHandler {
     handleNode(node, parentPath, parentId, startPosition, endPosition, nodeType) {
         const functionName = this.getFunctionName(node);
 
-        // Handle anonymous functions by assigning a unique name
-        let name = functionName;
-        if (!name || name === 'anonymous') {
-            name = `anonymous_${this.astAnalyzer.getUniqueId(node.text)}`;
+        // Determine if the function is anonymous
+        const isAnonymous = !functionName || functionName.includes('anonymous');
 
+        console.log('functionName:', functionName);
+        console.log('isAnonymous:', isAnonymous);
+
+        // Skip anonymous functions if the option is disabled
+        if (isAnonymous && !this.astAnalyzer.includeAnonymousFunctions) {
+            // Traverse the function body with the same parentId
+            this.traverseFunctionBody(node, parentPath, parentId);
+            return null;
         }
+
+        let name = functionName || `anonymous_${this.astAnalyzer.getUniqueId(node.text)}`;
 
         if (this.shouldProcessFunction(name)) {
             const path = `${parentPath}${name}`;

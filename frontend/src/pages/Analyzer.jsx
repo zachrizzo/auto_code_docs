@@ -40,6 +40,8 @@ import { ReactFlowProvider } from 'reactflow';
 import { useTheme } from '@mui/material/styles';
 import { ResizableBox } from 'react-resizable';
 import 'react-resizable/css/styles.css';
+import { Switch, FormControlLabel } from '@mui/material';
+
 import { ErrorBoundary } from 'react-error-boundary';
 
 // CodeMirror imports
@@ -73,6 +75,7 @@ const Analyzer = () => {
     const [codeSnippet, setCodeSnippet] = useState('');
     const [isCodeExpanded, setIsCodeExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
+    const [includeAnonymousFunctions, setIncludeAnonymousFunctions] = useState(true);
     const editorRef = useRef(null);
     const theme = useTheme();
     const containerRef = useRef(null);
@@ -108,10 +111,13 @@ const Analyzer = () => {
         setIsLoading(true);
 
         try {
-            const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir);
+            const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir, includeAnonymousFunctions);
 
             const parsedAnalysisResults = JSON.parse(analysisResults);
             const parsedGraphData = JSON.parse(graphData);
+
+            console.log('New Analysis Results:', parsedAnalysisResults);
+            console.log('New Graph Data:', parsedGraphData);
 
             setResults(parsedGraphData);
         } catch (error) {
@@ -120,12 +126,12 @@ const Analyzer = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [watchingDir]);
+    }, [watchingDir, includeAnonymousFunctions]);
 
     const clear = () => {
         setAIDescriptions({});
-        setResults({});
-        setSelectedNode(null); // Uncommented to reset the selected node
+        setResults({ nodes: [], edges: [] }); // Reset to initial structure
+        setSelectedNode(null);
         setEditedCode('');
         setUnitTest('');
         setIsDrawerOpen(false);
@@ -133,6 +139,7 @@ const Analyzer = () => {
         setCodeSnippet('');
         setIsCodeExpanded(false);
     };
+
 
     console.log('Selected Node:', selectedNode);
 
@@ -346,6 +353,7 @@ const Analyzer = () => {
             setWatchingDir(selectedDir);
             clear();
             setIsDirectoryDialogOpen(false);
+
         }
     };
 
@@ -437,6 +445,17 @@ const Analyzer = () => {
         >
 
             <Toolbar sx={{ justifyContent: 'end' }} >
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={includeAnonymousFunctions}
+                            onChange={(e) => setIncludeAnonymousFunctions(e.target.checked)}
+                            color="primary"
+                        />
+                    }
+                    label="Include Anonymous Functions"
+                    labelPlacement="start"
+                />
 
                 <Tooltip title="Select Directory">
                     <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
@@ -516,14 +535,20 @@ const Analyzer = () => {
                                 <Box sx={{ height: '100%', p: 2 }}>
                                     {viewMode === 'map' ? (
                                         <CodeFlowChart
+                                            key={watchingDir} // Force re-mount when directory changes
                                             data={results}
                                             focusNodeId={focusNodeId}
                                         />
                                     ) : (
                                         <Paper sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
-                                            <BorderedTreeView data={results} onNodeClick={handleNodeClick} />
+                                            <BorderedTreeView
+                                                key={watchingDir} // Force re-mount when directory changes
+                                                data={results}
+                                                onNodeClick={handleNodeClick}
+                                            />
                                         </Paper>
                                     )}
+
                                 </Box>
                             </NodeClickContext.Provider>
                         </ReactFlowProvider>

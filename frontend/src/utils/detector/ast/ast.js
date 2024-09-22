@@ -120,7 +120,7 @@ const langs = {
 }
 
 class ASTDetectionHandler {
-    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python', globalFunctionNameToId) {
+    constructor(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, currentFile, language = 'python', globalFunctionNameToId, includeAnonymousFunctions = true) {
         this.parser = parser;
         this.results = results;
         this.processedFunctions = processedFunctions || new Set();
@@ -129,6 +129,8 @@ class ASTDetectionHandler {
         this.watchedDir = watchedDir;
         this.currentFile = currentFile;
         this.importedModules = new Set();
+        this.includeAnonymousFunctions = includeAnonymousFunctions;
+
 
         this.globalFunctionNameToId = globalFunctionNameToId;
 

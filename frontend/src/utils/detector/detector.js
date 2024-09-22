@@ -64,7 +64,7 @@ export function detectLanguageFromFileName(fileName) {
     return languageExtensions[extension] || null;
 }
 
-export async function detectClassesAndFunctions(code, filePath, fileExtension, watchedDir) {
+export async function detectClassesAndFunctions(code, filePath, fileExtension, watchedDir, includeAnonymousFunctions) {
     console.log(`Analyzing file: ${filePath}`);
     try {
         const language = detectLanguageFromExtension(fileExtension);
@@ -92,7 +92,7 @@ export async function detectClassesAndFunctions(code, filePath, fileExtension, w
         const processedClasses = new Set();
 
         const parser = new Parser();
-        const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language, globalFunctionNameToId);
+        const ASTDetection = new ASTDetectionHandler(parser, results, processedFunctions, processedClasses, currentAnalysisId, watchedDir, filePath, language, globalFunctionNameToId, includeAnonymousFunctions);
 
         parser.setLanguage(parsers[language]);
 
@@ -234,7 +234,7 @@ async function loadIgnorePatterns(dir) {
     return ig;
 }
 
-export async function analyzeDirectory(watchingDir) {
+export async function analyzeDirectory(watchingDir, includeAnonymousFunctions) {
     console.log(`Analyzing directory: ${watchingDir}`);
     let aggregatedResults = {};
     const ig = await loadIgnorePatterns(watchingDir);
@@ -248,7 +248,7 @@ export async function analyzeDirectory(watchingDir) {
 
         return new Promise((resolve) => {
             setImmediate(async () => {
-                const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir);
+                const analysisResults = await detectClassesAndFunctions(fileContent, filePath, fileExtension, watchingDir, includeAnonymousFunctions);
                 aggregatedResults[filePath] = analysisResults;
                 resolve();
             });

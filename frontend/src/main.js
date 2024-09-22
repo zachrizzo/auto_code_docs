@@ -69,19 +69,17 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('analyze-directory', async (event, watchingDir) => {
+  ipcMain.handle('analyze-directory', async (event, watchingDir, includeAnonymousFunctions) => {
     console.log('Main: analyze-directory invoked', { watchingDir });
     try {
-      const results = await analyzeDirectory(watchingDir);
+      const results = await analyzeDirectory(watchingDir, includeAnonymousFunctions);
       const elkResults = await transformToReactFlowData(results);
 
-      allowedBaseDir = watchingDir; // Store the selected directory for security checks
+      allowedBaseDir = watchingDir; // Update allowedBaseDir
 
-      // Ensure the results and elkResults are serializable
       const serializedResults = JSON.stringify(results);
       const serializedElkResults = JSON.stringify(elkResults);
 
-      // Return the serialized data as strings
       return {
         analysisResults: serializedResults,
         graphData: serializedElkResults
@@ -91,6 +89,7 @@ app.whenReady().then(() => {
       throw error;
     }
   });
+
 
   ipcMain.handle('insert-code', async (event, { filePath, declarationInfo, newCode }) => {
     try {
