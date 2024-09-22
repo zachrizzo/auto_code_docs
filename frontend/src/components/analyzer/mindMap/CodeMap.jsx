@@ -94,11 +94,6 @@ function CodeFlowChart({ data, focusNodeId }) {
                 <Controls />
                 <MiniMap />
             </ReactFlow>
-            <Box position="absolute" top={10} left={10} zIndex={1000}>
-                <Typography variant="h6" component="div">
-                    Code Flow Chart
-                </Typography>
-            </Box>
         </Paper>
     );
 }

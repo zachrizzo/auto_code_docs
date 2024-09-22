@@ -265,7 +265,10 @@ const darkTheme = createTheme({
     },
     palette: {
         mode: 'dark',
-        background: { main: darkThemeColors.background },
+        background: {
+            main: darkThemeColors.background,
+            light: darkThemeColors.accentColor,
+        },
         accentColor: { main: darkThemeColors.accentColor },
         primary: { main: darkThemeColors.primaryStart },
         secondary: { main: darkThemeColors.secondaryMain },

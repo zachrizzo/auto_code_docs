@@ -13,6 +13,12 @@ import {
     Tooltip,
     CircularProgress,
     Divider,
+    AppBar,
+    Toolbar,
+    Tab,
+    Tabs,
+
+
 } from '@mui/material';
 import {
     FolderOpen as FolderOpenIcon,
@@ -20,6 +26,10 @@ import {
     SwapHoriz as SwapHorizIcon,
     Search as SearchIcon,
     Close as CloseIcon,
+    Save as SaveIcon,
+    Code as CodeIcon,
+    Description as DescriptionIcon,
+    BugReport as BugReportIcon,
 } from '@mui/icons-material';
 import PolylineOutlinedIcon from '@mui/icons-material/PolylineOutlined';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
@@ -46,7 +56,7 @@ const drawerMinWidth = 300;
 const drawerMaxWidth = 800;
 
 const Analyzer = () => {
-    const [results, setResults] = useState({});
+    const [results, setResults] = useState({ nodes: [], edges: [] });
     const [aiDescriptions, setAIDescriptions] = useState({});
     const [selectedNode, setSelectedNode] = useState(null);
     const [watchingDir, setWatchingDir] = useState('');
@@ -59,11 +69,35 @@ const Analyzer = () => {
     const [unitTest, setUnitTest] = useState('');
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerWidth, setDrawerWidth] = useState(400);
-    const [fileCode, setFileCode] = useState(''); // Entire file content
-    const [codeSnippet, setCodeSnippet] = useState(''); // Code snippet
+    const [fileCode, setFileCode] = useState('');
+    const [codeSnippet, setCodeSnippet] = useState('');
     const [isCodeExpanded, setIsCodeExpanded] = useState(false);
+    const [activeTab, setActiveTab] = useState(0);
     const editorRef = useRef(null);
     const theme = useTheme();
+    const containerRef = useRef(null);
+    const [drawerHeight, setDrawerHeight] = useState(0);
+
+
+
+    useEffect(() => {
+        const updateDrawerHeight = () => {
+            if (containerRef.current) {
+                const height = containerRef.current.clientHeight;
+                setDrawerHeight(height);
+            }
+        };
+
+        // Initial height set
+        updateDrawerHeight();
+
+        // Update height on window resize
+        window.addEventListener('resize', updateDrawerHeight);
+
+        return () => {
+            window.removeEventListener('resize', updateDrawerHeight);
+        };
+    }, []);
 
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
@@ -173,6 +207,10 @@ const Analyzer = () => {
             alert('An error occurred while saving the file.');
         }
     }, [selectedNode, isCodeExpanded, editedCode, fileCode, handleAnalyze]);
+
+    const handleTabChange = useCallback((event, newValue) => {
+        setActiveTab(newValue);
+    }, []);
 
     /**
      * Handles node click events to display details and allow editing.
@@ -387,29 +425,19 @@ const Analyzer = () => {
 
     return (
         <Box
+            ref={containerRef}
             sx={{
                 width: '100vw',
                 height: '93vh',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                position: 'relative',  // Add this line
-
+                position: 'relative',
             }}
         >
-            {/* Controls */}
-            <Box
-                sx={{
-                    p: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                }}
-            >
-                <Typography variant="h6" sx={{ flexGrow: 1, color: theme.palette.text }}>
-                    Code Analyzer
-                </Typography>
+
+            <Toolbar sx={{ justifyContent: 'end' }} >
+
                 <Tooltip title="Select Directory">
                     <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
                         <FolderOpenIcon />
@@ -432,7 +460,7 @@ const Analyzer = () => {
                 <Tooltip title="Toggle View">
                     <IconButton
                         color="inherit"
-                        onClick={() => setViewMode(viewMode === 'map' ? 'tree' : 'map')}
+                        onClick={() => setViewMode((prev) => (prev === 'map' ? 'tree' : 'map'))}
                     >
                         <SwapHorizIcon />
                     </IconButton>
@@ -446,6 +474,8 @@ const Analyzer = () => {
                         display: 'flex',
                         alignItems: 'center',
                         width: 250,
+
+                        borderRadius: 1,
                     }}
                 >
                     <TextField
@@ -454,20 +484,20 @@ const Analyzer = () => {
                         inputProps={{ 'aria-label': 'search code' }}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        sx={{ ml: 1, flex: 1, px: 2 }}
+                        sx={{ ml: 1, flex: 1, px: 2, backgroundColor: theme.palette.background.light }}
                         InputProps={{
                             disableUnderline: true,
                         }}
+
                     />
                     <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
                         <SearchIcon />
                     </IconButton>
                 </Box>
-            </Box>
+            </Toolbar>
 
-            {/* Main Content and Resizable Drawer */}
+
             <Box sx={{ display: 'flex', flexGrow: 1, height: '100%', position: 'relative' }}>
-                {/* Main Content */}
                 <Box sx={{ flexGrow: 1, height: '100%', overflow: 'hidden' }}>
                     {isLoading ? (
                         <Box
@@ -500,13 +530,12 @@ const Analyzer = () => {
                     )}
                 </Box>
 
-                {/* Resizable Drawer */}
-                {isDrawerOpen && (
+                {isDrawerOpen && drawerHeight > 0 && (
                     <ResizableBox
                         width={drawerWidth}
-                        height={Infinity}  // Change this line
-                        minConstraints={[drawerMinWidth, 0]}
-                        maxConstraints={[drawerMaxWidth, Infinity]}  // Change this line
+                        height={drawerHeight}
+                        minConstraints={[drawerMinWidth, drawerHeight]}
+                        maxConstraints={[drawerMaxWidth, drawerHeight]}
                         axis="x"
                         resizeHandles={['w']}
                         onResize={handleDrawerResize}
@@ -518,10 +547,9 @@ const Analyzer = () => {
                                     position: 'absolute',
                                     left: 0,
                                     top: 0,
-                                    right: isDrawerOpen ? `${drawerWidth}px` : 0,
                                     bottom: 0,
                                     zIndex: 1,
-                                    backgroundColor: theme.palette.divider,
+                                    backgroundColor: theme.palette.primary.main,
                                 }}
                             />
                         }
@@ -531,17 +559,15 @@ const Analyzer = () => {
                             top: 0,
                             bottom: 0,
                             zIndex: 1300,
-                            height: '100%',
-
                         }}
                     >
-                        <Box
+                        <Paper
+                            elevation={3}
                             sx={{
                                 width: '100%',
                                 height: '100%',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                backgroundColor: theme.palette.background.paper,
                                 position: 'relative',
                             }}
                         >
@@ -560,110 +586,90 @@ const Analyzer = () => {
                                     <CloseIcon />
                                 </IconButton>
                             </Box>
-                            <Divider />
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={handleSave}
-                                sx={{ mb: 2, m: 2 }}
-                            >
-                                Save
-                            </Button>
-
-                            <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto', height: 'calc(100% - 10px)' }}>
-                                <ReactMarkdown variant="body1" gutterBottom>
-                                    {aiDescriptions[selectedNode?.id] || 'Loading description...'}
-                                </ReactMarkdown>
-
-                                <Typography variant="h6" gutterBottom>
-                                    Code:
-                                </Typography>
-
-                                <Typography variant="caption">
-                                    {`Editing ${isCodeExpanded ? 'full file' : 'function or class'} "${selectedNode?.label}".`}
-                                </Typography>
-
-                                <Box sx={{ height: 300, mb: 2 }}>
-                                    {editedCode && (
-                                        <ErrorBoundary fallback={<div>Error loading code editor</div>}>
-                                            <CodeMirror
-                                                value={editedCode}
-                                                height="100%"
-                                                extensions={[
-                                                    javascript(),
-                                                    lineNumbers(),
-                                                    indentOnInput(), // Invoke the function
-                                                    EditorView.lineWrapping,
-                                                ]}
-                                                theme={oneDark}
-                                                onCreateEditor={(editor) => {
-                                                    editorRef.current = editor;
-                                                }}
-                                                onChange={(value) => setEditedCode(value)}
-                                            />
-
-                                        </ErrorBoundary>
-                                    )}
-                                </Box>
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={() => {
-                                        if (isCodeExpanded) {
-                                            // Switch to snippet view
-                                            const lines = editedCode.split('\n');
-                                            const { startPosition, endPosition } = selectedNode.declarationInfo;
-                                            const snippetLines = lines.slice(startPosition.row, endPosition.row + 1);
-                                            const snippetCode = snippetLines.join('\n');
-                                            setEditedCode(snippetCode);
-                                        } else {
-                                            // Switch to full code view
-                                            const lines = fileCode.split('\n');
-                                            const { startPosition, endPosition } = selectedNode.declarationInfo;
-                                            const editedLines = editedCode.split('\n');
-                                            const beforeLines = lines.slice(0, startPosition.row);
-                                            const afterLines = lines.slice(endPosition.row + 1);
-                                            const newLines = [...beforeLines, ...editedLines, ...afterLines];
-                                            const mergedCode = newLines.join('\n');
-                                            setEditedCode(mergedCode);
-                                        }
-                                        setIsCodeExpanded(!isCodeExpanded);
-                                    }}
-                                    sx={{ mb: 2 }}
-                                >
-                                    {isCodeExpanded ? 'Show Snippet' : 'Expand Code'}
-                                </Button>
-                                <Button
-                                    variant="contained"
-                                    color="primary"
-                                    onClick={handleGenerateUnitTest}
-                                    sx={{ mb: 2, ml: 2 }}
-                                >
-                                    Generate Unit Test
-                                </Button>
-                                {unitTest && (
+                            <Tabs value={activeTab} onChange={handleTabChange} centered>
+                                <Tab icon={<DescriptionIcon />} label="Description" />
+                                <Tab icon={<CodeIcon />} label="Code" />
+                                <Tab icon={<BugReportIcon />} label="Unit Test" />
+                            </Tabs>
+                            <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
+                                {activeTab === 0 && (
+                                    <ReactMarkdown>
+                                        {aiDescriptions[selectedNode?.id] || 'Loading description...'}
+                                    </ReactMarkdown>
+                                )}
+                                {activeTab === 1 && (
                                     <>
-                                        <Typography variant="h6" gutterBottom>
-                                            Generated Unit Test:
-                                        </Typography>
-                                        <Paper sx={{ p: 2, backgroundColor: '#f5f5f5', mb: 2 }}>
-                                            <Typography
-                                                variant="body2"
-                                                component="pre"
-                                                sx={{ whiteSpace: 'pre-wrap' }}
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                                            <Button
+                                                variant="contained"
+                                                color="primary"
+                                                onClick={handleSave}
+                                                startIcon={<SaveIcon />}
                                             >
-                                                {unitTest}
-                                            </Typography>
-                                        </Paper>
+                                                Save
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                onClick={() => {
+                                                    setIsCodeExpanded(!isCodeExpanded);
+                                                    setEditedCode(isCodeExpanded ? codeSnippet : fileCode);
+                                                }}
+                                            >
+                                                {isCodeExpanded ? 'Show Snippet' : 'Expand Code'}
+                                            </Button>
+                                        </Box>
+                                        <Typography variant="caption" display="block" gutterBottom>
+                                            {`Editing ${isCodeExpanded ? 'full file' : 'function or class'} "${selectedNode?.label}".`}
+                                        </Typography>
+                                        <Box sx={{ height: 300, mb: 2 }}>
+                                            {editedCode && (
+                                                <ErrorBoundary fallback={<div>Error loading code editor</div>}>
+                                                    <CodeMirror
+                                                        value={editedCode}
+                                                        height="100%"
+                                                        extensions={[javascript(), indentOnInput()]}
+                                                        theme={oneDark}
+                                                        onCreateEditor={(editor) => {
+                                                            editorRef.current = editor;
+                                                        }}
+                                                        onChange={(value) => setEditedCode(value)}
+                                                    />
+                                                </ErrorBoundary>
+                                            )}
+                                        </Box>
+                                    </>
+                                )}
+                                {activeTab === 2 && (
+                                    <>
+                                        <Button
+                                            variant="contained"
+                                            color="primary"
+                                            onClick={handleGenerateUnitTest}
+                                            startIcon={<BugReportIcon />}
+                                            sx={{ mb: 2 }}
+                                        >
+                                            Generate Unit Test
+                                        </Button>
+                                        {unitTest && (
+                                            <Paper sx={{ p: 2, backgroundColor: theme.palette.grey[100], mb: 2 }}>
+                                                <Typography
+                                                    variant="body2"
+                                                    component="pre"
+                                                    sx={{ whiteSpace: 'pre-wrap' }}
+                                                >
+                                                    {unitTest}
+                                                </Typography>
+                                            </Paper>
+                                        )}
                                     </>
                                 )}
                             </Box>
-                        </Box>
+                        </Paper>
                     </ResizableBox>
                 )}
             </Box>
 
-            {/* Directory Selection Dialog */}
             <Dialog
                 open={isDirectoryDialogOpen}
                 onClose={() => setIsDirectoryDialogOpen(false)}
@@ -685,6 +691,6 @@ const Analyzer = () => {
             </Dialog>
         </Box>
     );
-};
+}
 
 export default Analyzer;
