@@ -17,8 +17,13 @@ import {
     Toolbar,
     Tab,
     Tabs,
-
-
+    Drawer,
+    List,
+    ListItem,
+    ListItemIcon,
+    ListItemText,
+    Switch as MuiSwitch,
+    FormControlLabel,
 } from '@mui/material';
 import {
     FolderOpen as FolderOpenIcon,
@@ -30,6 +35,7 @@ import {
     Code as CodeIcon,
     Description as DescriptionIcon,
     BugReport as BugReportIcon,
+    Settings as SettingsIcon,
 } from '@mui/icons-material';
 import PolylineOutlinedIcon from '@mui/icons-material/PolylineOutlined';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
@@ -40,7 +46,6 @@ import { ReactFlowProvider } from 'reactflow';
 import { useTheme } from '@mui/material/styles';
 import { ResizableBox } from 'react-resizable';
 import 'react-resizable/css/styles.css';
-import { Switch, FormControlLabel } from '@mui/material';
 
 import { ErrorBoundary } from 'react-error-boundary';
 
@@ -76,12 +81,11 @@ const Analyzer = () => {
     const [isCodeExpanded, setIsCodeExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
     const [includeAnonymousFunctions, setIncludeAnonymousFunctions] = useState(true);
+    const [isSessionsPanelOpen, setIsSessionsPanelOpen] = useState(false); // New state for Sessions Panel
     const editorRef = useRef(null);
     const theme = useTheme();
     const containerRef = useRef(null);
     const [drawerHeight, setDrawerHeight] = useState(0);
-
-
 
     useEffect(() => {
         const updateDrawerHeight = () => {
@@ -139,7 +143,6 @@ const Analyzer = () => {
         setCodeSnippet('');
         setIsCodeExpanded(false);
     };
-
 
     console.log('Selected Node:', selectedNode);
 
@@ -353,7 +356,7 @@ const Analyzer = () => {
             setWatchingDir(selectedDir);
             clear();
             setIsDirectoryDialogOpen(false);
-
+            handleAnalyze(); // Automatically analyze after selecting directory
         }
     };
 
@@ -444,46 +447,46 @@ const Analyzer = () => {
             }}
         >
 
-            <Toolbar sx={{ justifyContent: 'end' }} >
-                <FormControlLabel
-                    control={
-                        <Switch
-                            checked={includeAnonymousFunctions}
-                            onChange={(e) => setIncludeAnonymousFunctions(e.target.checked)}
-                            color="primary"
-                        />
-                    }
-                    label="Include Anonymous Functions"
-                    labelPlacement="start"
-                />
+            {/* Toolbar with Settings Icon */}
+            <Toolbar sx={{ justifyContent: 'space-between' }} >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {/* Settings IconButton to open Sessions Panel */}
+                    <Tooltip title="Sessions">
+                        <IconButton color="inherit" onClick={() => setIsSessionsPanelOpen(true)}>
+                            <SettingsIcon />
+                        </IconButton>
+                    </Tooltip>
 
-                <Tooltip title="Select Directory">
-                    <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
-                        <FolderOpenIcon />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Analyze">
-                    <IconButton
-                        color="inherit"
-                        onClick={handleAnalyze}
-                        disabled={!watchingDir || isLoading}
-                    >
-                        <PolylineOutlinedIcon />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Clear Results">
-                    <IconButton color="inherit" onClick={clear}>
-                        <ClearAllIcon />
-                    </IconButton>
-                </Tooltip>
-                <Tooltip title="Toggle View">
-                    <IconButton
-                        color="inherit"
-                        onClick={() => setViewMode((prev) => (prev === 'map' ? 'tree' : 'map'))}
-                    >
-                        <SwapHorizIcon />
-                    </IconButton>
-                </Tooltip>
+                    <Tooltip title="Select Directory">
+                        <IconButton color="inherit" onClick={() => setIsDirectoryDialogOpen(true)}>
+                            <FolderOpenIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Analyze">
+                        <IconButton
+                            color="inherit"
+                            onClick={handleAnalyze}
+                            disabled={!watchingDir || isLoading}
+                        >
+                            <PolylineOutlinedIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Clear Results">
+                        <IconButton color="inherit" onClick={clear}>
+                            <ClearAllIcon />
+                        </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Toggle View">
+                        <IconButton
+                            color="inherit"
+                            onClick={() => setViewMode((prev) => (prev === 'map' ? 'tree' : 'map'))}
+                        >
+                            <SwapHorizIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+
+                {/* Search Form */}
                 <Box
                     component="form"
                     onSubmit={handleSearch}
@@ -503,7 +506,7 @@ const Analyzer = () => {
                         inputProps={{ 'aria-label': 'search code' }}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        sx={{ ml: 1, flex: 1, px: 2, backgroundColor: theme.palette.background.light }}
+                        sx={{ ml: 1, flex: 1, px: 2, backgroundColor: theme.palette.background.paper }}
                         InputProps={{
                             disableUnderline: true,
                         }}
@@ -515,7 +518,7 @@ const Analyzer = () => {
                 </Box>
             </Toolbar>
 
-
+            {/* Main Content Area */}
             <Box sx={{ display: 'flex', flexGrow: 1, height: '100%', position: 'relative' }}>
                 <Box sx={{ flexGrow: 1, height: '100%', overflow: 'hidden' }}>
                     {isLoading ? (
@@ -695,6 +698,54 @@ const Analyzer = () => {
                 )}
             </Box>
 
+            {/* Sessions Panel Drawer */}
+            <Drawer
+                anchor="left"
+                open={isSessionsPanelOpen}
+                onClose={() => setIsSessionsPanelOpen(false)}
+                PaperProps={{
+                    sx: {
+                        width: 300,
+                        padding: theme.spacing(2),
+                        backgroundColor: theme.palette.background.default,
+                    },
+                }}
+            >
+                <Box
+                    sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2,
+                    }}
+                >
+                    <Typography variant="h6">Sessions</Typography>
+                    <IconButton onClick={() => setIsSessionsPanelOpen(false)}>
+                        <CloseIcon />
+                    </IconButton>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                <List>
+                    <ListItem>
+                        <ListItemText primary="Settings" />
+                    </ListItem>
+                    <ListItem>
+                        <FormControlLabel
+                            control={
+                                <MuiSwitch
+                                    checked={includeAnonymousFunctions}
+                                    onChange={(e) => setIncludeAnonymousFunctions(e.target.checked)}
+                                    color="primary"
+                                />
+                            }
+                            label="Include Anonymous Functions"
+                        />
+                    </ListItem>
+                    {/* Add more session-related settings here if needed */}
+                </List>
+            </Drawer>
+
+            {/* Directory Selection Dialog */}
             <Dialog
                 open={isDirectoryDialogOpen}
                 onClose={() => setIsDirectoryDialogOpen(false)}
