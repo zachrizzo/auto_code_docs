@@ -1,24 +1,21 @@
+// functions/index.js
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+admin.initializeApp();
 
-exports.createUser = functions.https.onCall(async (data, context) => {
+exports.authCreateUser = functions.https.onCall(async (data, context) => {
     const { email, password, firstName, lastName, companyName } = data;
 
     try {
-
-        console.log('creating')
-        // Create user in Firebase Authentication
+        // Create a user in Firebase Auth
         const userRecord = await admin.auth().createUser({
             email: email,
             password: password,
-            displayName: `${firstName} ${lastName}`,
         });
 
-        console.log(userRecord)
-
-        // Add additional user data to Firestore
+        // Store additional user info in Firestore
         await admin.firestore().collection('users').doc(userRecord.uid).set({
-            uid: userRecord.uid,
             firstName: firstName,
             lastName: lastName,
             companyName: companyName,
@@ -26,9 +23,9 @@ exports.createUser = functions.https.onCall(async (data, context) => {
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
+        // Return the user's UID to the frontend
         return { uid: userRecord.uid };
     } catch (error) {
-        // Handle errors and return appropriate response
         console.error('Error creating user:', error);
         throw new functions.https.HttpsError('internal', 'Unable to create user', error);
     }

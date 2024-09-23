@@ -81,11 +81,14 @@ const Analyzer = () => {
     const [isCodeExpanded, setIsCodeExpanded] = useState(false);
     const [activeTab, setActiveTab] = useState(0);
     const [includeAnonymousFunctions, setIncludeAnonymousFunctions] = useState(true);
-    const [isSessionsPanelOpen, setIsSessionsPanelOpen] = useState(false); // New state for Sessions Panel
+    const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false); // New state for Settings Panel
     const editorRef = useRef(null);
     const theme = useTheme();
     const containerRef = useRef(null);
     const [drawerHeight, setDrawerHeight] = useState(0);
+    const [maxNodes, setMaxNodes] = useState(1000);
+    const [maxEdges, setMaxEdges] = useState(5000);
+    const [relationshipOrder, setRelationshipOrder] = useState('calledToCaller');
 
     useEffect(() => {
         const updateDrawerHeight = () => {
@@ -115,7 +118,7 @@ const Analyzer = () => {
         setIsLoading(true);
 
         try {
-            const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir, includeAnonymousFunctions);
+            const { analysisResults, graphData } = await ipcRenderer.invoke('analyze-directory', watchingDir, includeAnonymousFunctions, maxNodes, maxEdges, relationshipOrder);
 
             const parsedAnalysisResults = JSON.parse(analysisResults);
             const parsedGraphData = JSON.parse(graphData);
@@ -130,7 +133,7 @@ const Analyzer = () => {
         } finally {
             setIsLoading(false);
         }
-    }, [watchingDir, includeAnonymousFunctions]);
+    }, [watchingDir, includeAnonymousFunctions, maxNodes, maxEdges, relationshipOrder]);
 
     const clear = () => {
         setAIDescriptions({});
@@ -356,19 +359,9 @@ const Analyzer = () => {
             setWatchingDir(selectedDir);
             clear();
             setIsDirectoryDialogOpen(false);
-            handleAnalyze(); // Automatically analyze after selecting directory
         }
     };
 
-    useEffect(() => {
-        ipcRenderer.on('file-changed', (event, { filePath, content }) => {
-            handleAnalyze();
-        });
-
-        return () => {
-            ipcRenderer.removeAllListeners('file-changed');
-        };
-    }, [handleAnalyze]);
 
     /**
      * Handles search form submission.
@@ -450,9 +443,9 @@ const Analyzer = () => {
             {/* Toolbar with Settings Icon */}
             <Toolbar sx={{ justifyContent: 'space-between' }} >
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    {/* Settings IconButton to open Sessions Panel */}
-                    <Tooltip title="Sessions">
-                        <IconButton color="inherit" onClick={() => setIsSessionsPanelOpen(true)}>
+                    {/* Settings IconButton to open Settings Panel */}
+                    <Tooltip title="Settings">
+                        <IconButton color="inherit" onClick={() => setIsSettingsPanelOpen(true)}>
                             <SettingsIcon />
                         </IconButton>
                     </Tooltip>
@@ -698,16 +691,17 @@ const Analyzer = () => {
                 )}
             </Box>
 
-            {/* Sessions Panel Drawer */}
+            {/* Settings Panel Drawer */}
             <Drawer
                 anchor="left"
-                open={isSessionsPanelOpen}
-                onClose={() => setIsSessionsPanelOpen(false)}
+                open={isSettingsPanelOpen}
+                onClose={() => setIsSettingsPanelOpen(false)}
+
                 PaperProps={{
                     sx: {
-                        width: 300,
+                        width: 400,
                         padding: theme.spacing(2),
-                        backgroundColor: theme.palette.background.default,
+                        backgroundColor: theme.palette.background,
                     },
                 }}
             >
@@ -719,16 +713,14 @@ const Analyzer = () => {
                         mb: 2,
                     }}
                 >
-                    <Typography variant="h6">Sessions</Typography>
-                    <IconButton onClick={() => setIsSessionsPanelOpen(false)}>
+                    <Typography variant="h6">Settings</Typography>
+                    <IconButton onClick={() => setIsSettingsPanelOpen(false)}>
                         <CloseIcon />
                     </IconButton>
                 </Box>
                 <Divider sx={{ mb: 2 }} />
                 <List>
-                    <ListItem>
-                        <ListItemText primary="Settings" />
-                    </ListItem>
+
                     <ListItem>
                         <FormControlLabel
                             control={
@@ -739,6 +731,36 @@ const Analyzer = () => {
                                 />
                             }
                             label="Include Anonymous Functions"
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <TextField
+                            label="Max Nodes"
+                            type="number"
+                            value={maxNodes}
+                            onChange={(e) => setMaxNodes(Number(e.target.value))}
+                            fullWidth
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <TextField
+                            label="Max Edges"
+                            type="number"
+                            value={maxEdges}
+                            onChange={(e) => setMaxEdges(Number(e.target.value))}
+                            fullWidth
+                        />
+                    </ListItem>
+                    <ListItem>
+                        <FormControlLabel
+                            control={
+                                <MuiSwitch
+                                    checked={relationshipOrder === 'callerToCalled'}
+                                    onChange={(e) => setRelationshipOrder(e.target.checked ? 'callerToCalled' : 'calledToCaller')}
+                                    color="primary"
+                                />
+                            }
+                            label="Caller to Called"
                         />
                     </ListItem>
                     {/* Add more session-related settings here if needed */}

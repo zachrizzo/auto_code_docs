@@ -112,9 +112,9 @@ export const CallEdge = ({
                 markerEnd="url(#arrowclosed)"
             />
             <text>
-                <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
+                {/* <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
                     Call
-                </textPath>
+                </textPath> */}
             </text>
         </>
     );
@@ -170,9 +170,9 @@ export const CrossFileCallEdge = ({
                 markerEnd="url(#arrowclosed)"
             />
             <text>
-                <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
+                {/* <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
                     Cross File Call
-                </textPath>
+                </textPath> */}
             </text>
         </>
     );
@@ -229,9 +229,9 @@ export const CodependentEdge = ({
                 markerStart="url(#arrowclosed)"
             />
             <text>
-                <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
+                {/* <textPath href={`#${id}`} style={{ fontSize: 12 }} startOffset="50%" textAnchor="middle">
                     Codependent
-                </textPath>
+                </textPath> */}
             </text>
         </>
     );

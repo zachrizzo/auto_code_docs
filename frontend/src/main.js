@@ -41,11 +41,23 @@ const createWindow = () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http://localhost:3000; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:3000 http://127.0.0.1:8000 https://identitytoolkit.googleapis.com https://*.firebaseio.com https://www.googleapis.com"
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "connect-src 'self' " +
+          "https://*.firebaseio.com " +
+          "https://*.googleapis.com " +
+          "https://*.gstatic.com " +
+          "https://identitytoolkit.googleapis.com " +
+          "https://securetoken.googleapis.com " +
+          "https://firestore.googleapis.com " +
+          "wss://*.firebaseio.com " +
+          "https://us-central1-auto-code-documentation.cloudfunctions.net;" // Add your Firebase Cloud Functions domain
         ]
       }
     });
   });
+
 
   // Load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
@@ -69,11 +81,11 @@ app.whenReady().then(() => {
     }
   });
 
-  ipcMain.handle('analyze-directory', async (event, watchingDir, includeAnonymousFunctions) => {
+  ipcMain.handle('analyze-directory', async (event, watchingDir, includeAnonymousFunctions, maxNodes, maxEdges, nodeDependencyDirection) => {
     console.log('Main: analyze-directory invoked', { watchingDir });
     try {
       const results = await analyzeDirectory(watchingDir, includeAnonymousFunctions);
-      const elkResults = await transformToReactFlowData(results);
+      const elkResults = await transformToReactFlowData(results, maxNodes, maxEdges, nodeDependencyDirection);
 
       allowedBaseDir = watchingDir; // Update allowedBaseDir
 

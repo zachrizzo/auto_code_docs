@@ -27,7 +27,10 @@ export async function transformToReactFlowData(
     parsedData,
     maxNodes = 1000,
     maxEdges = 5000,
-    progressCallback
+    relationshipOrder,
+    progressCallback,
+
+
 ) {
     if (
         !parsedData ||
@@ -58,7 +61,8 @@ export async function transformToReactFlowData(
             nodeSet,
             nodeMap,
             maxNodes,
-            maxEdges
+            maxEdges,
+            relationshipOrder
         );
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -109,7 +113,8 @@ async function processChunk(
     nodeSet,
     nodeMap,
     maxNodes,
-    maxEdges
+    maxEdges,
+    relationshipOrder
 ) {
     for (const [fileName, fileData] of chunk) {
         if (nodes.length >= maxNodes || edges.length >= maxEdges) break;
@@ -148,15 +153,15 @@ async function processChunk(
             }
         }
 
-        processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges);
+        processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges, relationshipOrder);
     }
 }
 
-function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
+function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges, relationshipOrder) {
     const addEdge = (source, target, type) => {
         if (edges.length < maxEdges && nodeSet.has(source) && nodeSet.has(target)) {
             // For call and crossFileCall, we'll reverse the source and target
-            if (type === 'call' || type === 'crossFileCall') {
+            if (relationshipOrder && (type === 'call' || type === 'crossFileCall')) {
                 safeAddEdge(target, source, { type }, edges, nodeSet);
             } else {
                 safeAddEdge(source, target, { type }, edges, nodeSet);
@@ -175,10 +180,7 @@ function processEdges(fileData, fileNodeId, edges, nodeSet, maxEdges) {
     Object.entries(fileData.functionCallRelationships || {}).forEach(([callerFunctionId, calledFunctionIds]) => {
         if (Array.isArray(calledFunctionIds)) {
             calledFunctionIds.forEach((calledFunctionId) => {
-                const type = fileData.functionCallRelationships[calledFunctionId]?.includes(callerFunctionId)
-                    ? 'codependent'
-                    : 'call';
-                addEdge(callerFunctionId, calledFunctionId, type);
+                addEdge(callerFunctionId, calledFunctionId, 'call');
             });
         }
     });

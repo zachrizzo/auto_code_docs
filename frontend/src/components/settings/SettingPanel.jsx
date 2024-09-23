@@ -1,6 +1,6 @@
 // src/components/settings/SettingsPanel.jsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Popover,
     Typography,
@@ -26,12 +26,14 @@ import {
     FormLabel,
     Radio,
 } from '@mui/material';
-import SettingsSuggestIcon from '@mui/icons-material/SettingsSuggest';
+
+import { getAuth, signOut } from 'firebase/auth';
+import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
 import FeedbackIcon from '@mui/icons-material/Feedback';
-import { getAuth, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc } from 'firebase/firestore';
-import PropTypes from 'prop-types';
+import CloseIcon from '@mui/icons-material/Close';
+import { useNavigate } from 'react-router-dom';
 
 const SettingsPanel = ({
     anchorEl,
@@ -45,16 +47,16 @@ const SettingsPanel = ({
     const db = getFirestore();
 
     // State for Snackbar notifications
-    const [snackbarOpen, setSnackbarOpen] = React.useState(false);
-    const [snackbarMessage, setSnackbarMessage] = React.useState('');
-    const [snackbarSeverity, setSnackbarSeverity] = React.useState('success');
+    const [snackbarOpen, setSnackbarOpen] = useState(false);
+    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const [snackbarSeverity, setSnackbarSeverity] = useState('success');
 
     // State for Feedback Modal
-    const [feedbackOpen, setFeedbackOpen] = React.useState(false);
-    const [feedbackType, setFeedbackType] = React.useState('bug');
-    const [feedbackDescription, setFeedbackDescription] = React.useState('');
-    const [feedbackEmail, setFeedbackEmail] = React.useState('');
-    const [feedbackSubmitting, setFeedbackSubmitting] = React.useState(false);
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const [feedbackType, setFeedbackType] = useState('bug');
+    const [feedbackDescription, setFeedbackDescription] = useState('');
+    const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+    const navigate = useNavigate();
 
     const handleLogout = async () => {
         try {
@@ -64,6 +66,7 @@ const SettingsPanel = ({
             setSnackbarSeverity('success');
             setSnackbarOpen(true);
             onClose(); // Close the settings panel after logout
+            navigate('/login'); // Redirect to the login page
         } catch (error) {
             console.error('Error signing out:', error);
             // Show error notification
@@ -87,7 +90,6 @@ const SettingsPanel = ({
         // Reset form fields
         setFeedbackType('bug');
         setFeedbackDescription('');
-        setFeedbackEmail('');
     };
 
     const handleSubmitFeedback = async () => {
@@ -104,8 +106,9 @@ const SettingsPanel = ({
             await addDoc(collection(db, 'feedback'), {
                 type: feedbackType,
                 description: feedbackDescription,
-                email: feedbackEmail || null,
-                timestamp: new Date(),
+                email: auth.currentUser.email,
+                uid: auth.currentUser.uid,
+                timestamp: serverTimestamp(), // Use serverTimestamp for accurate timing
             });
             setSnackbarMessage('Thank you for your feedback!');
             setSnackbarSeverity('success');
@@ -136,134 +139,108 @@ const SettingsPanel = ({
                     horizontal: 'right',
                 }}
                 PaperProps={{
-                    sx: {
-                        p: 3,
-                        width: { xs: 280, sm: 320 },
-                        borderRadius: 2,
-                        boxShadow: 24,
-                    },
+                    sx: (theme) => ({
+                        padding: theme.spacing(3),
+                        maxWidth: 400,
+                        margin: 'auto',
+                        marginTop: theme.spacing(4),
+                        boxShadow: theme.shadows[3],
+                    }),
                 }}
             >
-                <Stack spacing={3}>
-                    {/* Header */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography variant="h6" component="div">
-                            Settings
-                        </Typography>
-                        <Tooltip title="Close Settings">
-                            <IconButton onClick={onClose} size="small">
-                                <SettingsSuggestIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
 
-                    {/* Auto Get Docs Switch */}
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={settings.autoGetDocs}
-                                onChange={() => handleToggle('autoGetDocs')}
-                                color="primary"
-                                inputProps={{ 'aria-label': 'Auto Get Docs' }}
-                            />
-                        }
-                        label="Auto Get Docs"
-                    />
+                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="h5" component="h2">
+                        Settings
+                    </Typography>
+                    <Tooltip title="Settings">
+                        <IconButton>
+                            <SettingsIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
 
-                    {/* Length of Docs Selector */}
-                    <Box>
-                        <Typography variant="subtitle1" gutterBottom>
-                            Length of Docs
-                        </Typography>
-                        <Select
-                            value={settings.docLength}
-                            onChange={(e) => handleChange('docLength', e.target.value)}
-                            fullWidth
-                            variant="outlined"
-                            displayEmpty
-                            inputProps={{ 'aria-label': 'Length of Docs' }}
-                        >
-                            {[...Array(10).keys()].map((num) => (
-                                <MenuItem key={num + 1} value={num + 1}>
-                                    {num + 1} Sentence{num + 1 > 1 ? 's' : ''}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </Box>
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={settings.autoGetDocs}
+                            onChange={(e) => handleToggle('autoGetDocs', e.target.checked)}
+                            color="primary"
+                        />
+                    }
+                    label="Auto Get Docs"
+                />
 
-                    {/* Run Locally Switch */}
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                checked={settings.runLocally}
-                                onChange={() => handleToggle('runLocally')}
-                                color="primary"
-                                inputProps={{ 'aria-label': 'Run Locally' }}
-                            />
-                        }
-                        label="Run Locally"
-                    />
-
-                    {/* Feedback Button */}
-                    <Button
-                        variant="outlined"
-                        startIcon={<FeedbackIcon />}
-                        onClick={handleOpenFeedback}
-                        sx={{
-                            textTransform: 'none',
-                            color: 'text.primary',
-                            borderColor: 'text.primary',
-                            '&:hover': {
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                                borderColor: 'text.primary',
-                            },
-                        }}
+                <Box mt={2} mb={2}>
+                    <Typography variant="subtitle1" gutterBottom>
+                        Length of Docs
+                    </Typography>
+                    <Select
+                        value={settings.docLength}
+                        onChange={(e) => handleChange('docLength', e.target.value)}
+                        fullWidth
                     >
-                        Send Feedback
-                    </Button>
+                        {[...Array(10)].map((_, i) => {
+                            const value = i + 1;
+                            return (
+                                <MenuItem key={value} value={value}>
+                                    {value} Sentence{value !== 1 ? 's' : ''}
+                                </MenuItem>
+                            );
+                        })}
+                    </Select>
+                </Box>
 
-                    {/* Divider */}
-                    <Divider />
+                <FormControlLabel
+                    control={
+                        <Switch
+                            checked={settings.runLocally}
+                            onChange={(e) => handleToggle('runLocally', e.target.checked)}
+                            color="primary"
+                        />
+                    }
+                    label="Run Locally"
+                />
 
-                    {/* Action Buttons */}
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
-                        <Button
-                            variant="outlined"
-                            onClick={onClose}
-                            startIcon={<SettingsSuggestIcon />}
-                            sx={{
-                                textTransform: 'none',
-                                color: 'text.primary',
-                                borderColor: 'text.primary',
-                                '&:hover': {
-                                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                                    borderColor: 'text.primary',
-                                },
-                            }}
-                        >
-                            Close
-                        </Button>
-                        <Button
-                            variant="contained"
-                            color="error"
-                            onClick={handleLogout}
-                            startIcon={<LogoutIcon />}
-                            sx={{
-                                textTransform: 'none',
-                                '&:hover': {
-                                    backgroundColor: '#d32f2f',
-                                },
-                            }}
-                        >
-                            Logout
-                        </Button>
-                    </Stack>
-                </Stack>
+                <Divider sx={{ my: 2 }} />
+
+                <Button
+                    variant="outlined"
+                    startIcon={<FeedbackIcon />}
+                    onClick={handleOpenFeedback}
+                    fullWidth
+                    sx={{ mb: 2 }}
+                >
+                    Send Feedback
+                </Button>
+
+                <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<LogoutIcon />}
+                    onClick={handleLogout}
+                    fullWidth
+                >
+                    Logout
+                </Button>
             </Popover>
 
             {/* Feedback Modal */}
             <Dialog open={feedbackOpen} onClose={handleCloseFeedback} fullWidth maxWidth="sm">
-                <DialogTitle>Send Feedback</DialogTitle>
+                <DialogTitle>
+                    Send Feedback
+                    <IconButton
+                        aria-label="close"
+                        onClick={handleCloseFeedback}
+                        sx={{
+                            position: 'absolute',
+                            right: 8,
+                            top: 8,
+                        }}
+                    >
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
                 <DialogContent>
                     <Stack spacing={2} mt={1}>
                         <FormControl component="fieldset">
@@ -286,14 +263,9 @@ const SettingsPanel = ({
                             value={feedbackDescription}
                             onChange={(e) => setFeedbackDescription(e.target.value)}
                             required
+                            placeholder="Please describe your feedback in detail."
                         />
-                        <TextField
-                            label="Your Email (Optional)"
-                            type="email"
-                            variant="outlined"
-                            value={feedbackEmail}
-                            onChange={(e) => setFeedbackEmail(e.target.value)}
-                        />
+
                     </Stack>
                 </DialogContent>
                 <DialogActions>
@@ -304,6 +276,7 @@ const SettingsPanel = ({
                         variant="contained"
                         onClick={handleSubmitFeedback}
                         disabled={feedbackSubmitting}
+                        color="primary"
                     >
                         {feedbackSubmitting ? 'Submitting...' : 'Submit'}
                     </Button>
@@ -327,7 +300,7 @@ const SettingsPanel = ({
                 </Alert>
             </Snackbar>
         </>
-    );
+    )
 
 }
 

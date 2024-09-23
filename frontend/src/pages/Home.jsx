@@ -27,7 +27,7 @@ function Home() {
     return (
         <Box sx={{ py: 8 }}>
             <Typography variant="h3" align="center" gutterBottom>
-                Welcome to CodeAnalyzer
+                Welcome to Fractal X (Beta)
             </Typography>
             <Typography variant="h6" align="center" color="textSecondary" paragraph>
                 Analyze your codebase, ensure code quality, and manage your databases efficiently.

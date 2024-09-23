@@ -132,7 +132,7 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                         <Code sx={{ mr: 1, fontSize: 30 }} />
                         <Tooltip title="Home">
                             <Typography variant="h6" noWrap>
-                                Fractal X
+                                Fractal X (beta)
                             </Typography>
                         </Tooltip>
                     </Box>

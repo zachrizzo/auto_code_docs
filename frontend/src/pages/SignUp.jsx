@@ -18,11 +18,10 @@ import {
     Login as LoginIcon,
     PersonAdd as PersonAddIcon,
 } from '@mui/icons-material';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
-import { db, auth, functions } from '../firebase/firebase.js';
+import { createUserWithEmailAndPassword } from 'firebase/auth'; // Import from Firebase Auth
+import { db, auth } from '../firebase/firebase.js'; // Use your Firebase initialization file
 import { useNavigate } from 'react-router-dom';
-import { httpsCallable } from 'firebase/functions';
+import { doc, setDoc } from 'firebase/firestore';
 
 const SignUp = () => {
     const [firstName, setFirstName] = useState('');
@@ -77,18 +76,22 @@ const SignUp = () => {
     const handleSignUp = async () => {
         if (validateInputs()) {
             try {
-                const createUser = httpsCallable(functions, 'auth-createUser');
+                // Sign up user using Firebase Authentication
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
 
-                const result = await createUser({
-                    email,
-                    password,
+                // Store additional user info in Firestore
+                await setDoc(doc(db, 'users', user.uid), {
+                    userId: user.uid,
                     firstName,
                     lastName,
                     companyName,
+                    email,
+                    createdAt: new Date(),
                 });
 
-                console.log('User created with UID:', result.data.uid);
-                navigate('/'); // Redirect to the home page
+                console.log('User created with UID:', user.uid);
+                navigate('/'); // Redirect to the home page after successful sign-up
             } catch (error) {
                 console.error('Error creating user:', error);
                 setErrors((prevErrors) => ({
