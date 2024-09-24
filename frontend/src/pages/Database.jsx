@@ -3,8 +3,7 @@ import {
     TextField, Button, Container, Typography, Box, Card, CardContent, CardActions,
     Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
     Accordion, AccordionSummary, AccordionDetails, Chip, Divider, Tooltip, Paper,
-    Grid, IconButton, LinearProgress, Snackbar, Alert, Stepper, Step, StepLabel,
-    StepContent
+    Grid, IconButton, LinearProgress, Snackbar, Alert, Stepper, Step, StepLabel, StepContent
 } from '@mui/material';
 import {
     ExpandMore as ExpandMoreIcon, CloudUpload as CloudUploadIcon,
@@ -131,7 +130,7 @@ export default function DatabaseManagementPage() {
         }
 
         try {
-            const response = await fetch('http://localhost:8000/compare-documents', {
+            const response = await fetch('http://127.0.0.1:8000/compare-documents', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -200,7 +199,6 @@ export default function DatabaseManagementPage() {
                     message: 'Service account JSON loaded successfully',
                     severity: 'success',
                 });
-                setActiveStep(1);
             } catch (error) {
                 console.error('Error parsing JSON file:', error);
                 setSnackbar({
@@ -208,10 +206,15 @@ export default function DatabaseManagementPage() {
                     message: 'Invalid JSON file. Please upload a valid Firebase service account JSON file.',
                     severity: 'error',
                 });
+            } finally {
+                setIsLoading(false);
             }
         };
-        reader.readAsText(file);
-        setIsLoading(false);
+        if (file) {
+            reader.readAsText(file);
+        } else {
+            setIsLoading(false);
+        }
     };
 
     const handleSave = useCallback(async () => {
@@ -325,7 +328,7 @@ export default function DatabaseManagementPage() {
                     message: 'Schema file loaded successfully',
                     severity: 'success',
                 });
-                setActiveStep(2);
+                setActiveStep((prev) => prev + 1);
             } catch (error) {
                 console.error('Error parsing schema file:', error);
                 setSnackbar({
@@ -335,7 +338,17 @@ export default function DatabaseManagementPage() {
                 });
             }
         };
-        reader.readAsText(file);
+        if (file) {
+            reader.readAsText(file);
+        }
+    };
+
+    const handleNext = () => {
+        setActiveStep((prevActiveStep) => prevActiveStep + 1);
+    };
+
+    const handleBack = () => {
+        setActiveStep((prevActiveStep) => prevActiveStep - 1);
     };
 
     const steps = [
@@ -361,25 +374,48 @@ export default function DatabaseManagementPage() {
                             Service account JSON loaded.
                         </Typography>
                     )}
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleNext}
+                            disabled={!serviceAccount}
+                        >
+                            Next
+                        </Button>
+                    </Box>
                 </Box>
             ),
         },
         {
             label: 'Enter Collection Name',
             content: (
-                <TextField
-                    label="Collection Name"
-                    variant="outlined"
-                    value={collectionName}
-                    onChange={(e) => {
-                        setCollectionName(e.target.value);
-                        if (e.target.value) {
-                            setActiveStep(2);
-                        }
-                    }}
-                    fullWidth
-                    margin="normal"
-                />
+                <Box>
+                    <TextField
+                        label="Collection Name"
+                        variant="outlined"
+                        value={collectionName}
+                        onChange={(e) => setCollectionName(e.target.value)}
+                        fullWidth
+                        margin="normal"
+                    />
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleBack}
+                        >
+                            Back
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleNext}
+                            disabled={!collectionName.trim()}
+                        >
+                            Next
+                        </Button>
+                    </Box>
+                </Box>
             ),
         },
         {
@@ -414,21 +450,48 @@ export default function DatabaseManagementPage() {
                             Database schema loaded ({dbSchema.length} fields).
                         </Typography>
                     )}
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleBack}
+                        >
+                            Back
+                        </Button>
+                        <Button
+                            variant="contained"
+                            color="primary"
+                            onClick={handleNext}
+                            disabled={!dbSchema.length && !assumeSchema}
+                        >
+                            Next
+                        </Button>
+                    </Box>
                 </Box>
             ),
         },
         {
             label: 'Compare Documents',
             content: (
-                <Button
-                    variant="contained"
-                    color="secondary"
-                    startIcon={<CompareIcon />}
-                    onClick={compareFirestoreData}
-                    disabled={!serviceAccount || !collectionName || isLoading}
-                >
-                    Compare Documents
-                </Button>
+                <Box>
+                    <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<CompareIcon />}
+                        onClick={compareFirestoreData}
+                        disabled={!serviceAccount || !collectionName || isLoading}
+                    >
+                        Compare Documents
+                    </Button>
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
+                        <Button
+                            variant="outlined"
+                            onClick={handleBack}
+                        >
+                            Back
+                        </Button>
+                        {/* Optionally, you can add a "Finish" button or keep it as is */}
+                    </Box>
+                </Box>
             ),
         },
     ];
