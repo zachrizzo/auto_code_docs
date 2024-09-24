@@ -1,3 +1,5 @@
+// DatabaseManagementPage.jsx
+
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     TextField,
@@ -20,34 +22,63 @@ import {
     Chip,
     Divider,
     Tooltip,
-    Paper
+    Paper,
+    Grid,
+    IconButton,
+    LinearProgress,
+    Snackbar,
 } from '@mui/material';
-import Store from 'electron-store';
-import { useTheme } from '@mui/material/styles';
-import FirebaseConfigModal from '../components/database/FirebaseConfigModal.jsx';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore.js';
+import {
+    ExpandMore as ExpandMoreIcon,
+    CloudUpload as CloudUploadIcon,
+    Compare as CompareIcon,
+    Delete as DeleteIcon,
+    Edit as EditIcon,
+} from '@mui/icons-material';
+import { styled } from '@mui/material/styles';
 
-const store = new Store({
-    name: 'FirebaseConfigManager',
-    defaults: {
-        firebaseConfigs: [],
-    },
+// Assuming FirebaseConfigModal is imported correctly
+import FirebaseConfigModal from '../components/database/FirebaseConfigModal.jsx';
+
+const VisuallyHiddenInput = styled('input')({
+    clip: 'rect(0 0 0 0)',
+    clipPath: 'inset(50%)',
+    height: 1,
+    overflow: 'hidden',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    whiteSpace: 'nowrap',
+    width: 1,
 });
 
 const CustomCard = ({ data, onSelect, selected, onEdit }) => {
     return (
-        <Card style={{ minWidth: '300px' }}>
+        <Card elevation={3} sx={{ minWidth: 300, m: 1 }}>
             <CardContent>
-                <Checkbox
-                    checked={selected}
-                    onChange={(e) => onSelect(data, e.target.checked)}
-                />
-                <Typography variant="h6">Project ID: {data.projectId}</Typography>
-                <Typography color="textSecondary">API Key: {data.apiKey}</Typography>
-                <Typography color="textSecondary">Auth Domain: {data.authDomain}</Typography>
+                <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="h6" noWrap>
+                        {data.projectId}
+                    </Typography>
+                    <Checkbox
+                        checked={selected}
+                        onChange={(e) => onSelect(data, e.target.checked)}
+                    />
+                </Box>
+                <Typography color="text.secondary" noWrap>
+                    API Key: {data.apiKey}
+                </Typography>
+                <Typography color="text.secondary" noWrap>
+                    Auth Domain: {data.authDomain}
+                </Typography>
             </CardContent>
             <CardActions>
-                <Button size="small" color="primary" onClick={() => onEdit(data)}>
+                <Button
+                    startIcon={<EditIcon />}
+                    size="small"
+                    color="primary"
+                    onClick={() => onEdit(data)}
+                >
                     Edit
                 </Button>
             </CardActions>
@@ -55,7 +86,7 @@ const CustomCard = ({ data, onSelect, selected, onEdit }) => {
     );
 };
 
-const DatabaseManagementPage = () => {
+export default function DatabaseManagementPage() {
     const [firebaseConfigs, setFirebaseConfigs] = useState([]);
     const [selectedConfigs, setSelectedConfigs] = useState([]);
     const [selectedConfig, setSelectedConfig] = useState(null);
@@ -64,22 +95,32 @@ const DatabaseManagementPage = () => {
     const [collectionName, setCollectionName] = useState('');
     const [discrepancies, setDiscrepancies] = useState([]);
     const [serviceAccount, setServiceAccount] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
     const [dbSchema, setDbSchema] = useState([]);
     const [assumeSchema, setAssumeSchema] = useState(false);
-
-    const theme = useTheme();
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'info',
+    });
 
     useEffect(() => {
-        const loadConfigs = () => {
-            const savedConfigs = store.get('firebaseConfigs');
+        const loadConfigs = async () => {
+            const savedConfigs = await window.electronAPI.getConfigs();
             setFirebaseConfigs(Array.isArray(savedConfigs) ? savedConfigs : []);
         };
 
         loadConfigs();
 
-        const unsubscribe = store.onDidChange('firebaseConfigs', loadConfigs);
-        return () => unsubscribe();
+        const handleConfigsChanged = (configs) => {
+            setFirebaseConfigs(Array.isArray(configs) ? configs : []);
+        };
+
+        window.electronAPI.onConfigsChanged(handleConfigsChanged);
+
+        return () => {
+            window.electronAPI.removeConfigsChangedListener(handleConfigsChanged);
+        };
     }, []);
 
     const handleOpenModal = (config) => {
@@ -95,12 +136,22 @@ const DatabaseManagementPage = () => {
     const compareFirestoreData = async () => {
         setIsLoading(true);
         if (!serviceAccount) {
-            alert('Please upload a Firebase service account JSON file.');
+            setSnackbar({
+                open: true,
+                message: 'Please upload a Firebase service account JSON file.',
+                severity: 'error',
+            });
+            setIsLoading(false);
             return;
         }
 
         if (!collectionName) {
-            alert('Please enter a collection name.');
+            setSnackbar({
+                open: true,
+                message: 'Please enter a collection name.',
+                severity: 'error',
+            });
+            setIsLoading(false);
             return;
         }
 
@@ -128,16 +179,33 @@ const DatabaseManagementPage = () => {
                     const assumedSchema = getAssumedSchema(data.discrepancies);
                     setDbSchema(assumedSchema);
                 }
+                setSnackbar({
+                    open: true,
+                    message: 'Discrepancies fetched successfully',
+                    severity: 'success',
+                });
             } else if (data && data.error) {
                 console.error('Error from API:', data.error);
-                alert(`Error from server: ${data.error}`);
+                setSnackbar({
+                    open: true,
+                    message: `Error from server: ${data.error}`,
+                    severity: 'error',
+                });
             } else {
                 console.error('Unexpected response format:', data);
-                alert('Unexpected response format received from the server.');
+                setSnackbar({
+                    open: true,
+                    message: 'Unexpected response format received from the server.',
+                    severity: 'error',
+                });
             }
         } catch (error) {
             console.error('Error comparing Firestore data:', error);
-            alert(`Error comparing Firestore data: ${error.message}`);
+            setSnackbar({
+                open: true,
+                message: `Error comparing Firestore data: ${error.message}`,
+                severity: 'error',
+            });
         } finally {
             setIsLoading(false);
         }
@@ -151,54 +219,84 @@ const DatabaseManagementPage = () => {
             try {
                 const jsonContent = JSON.parse(e.target.result);
                 setServiceAccount(jsonContent);
+                setSnackbar({
+                    open: true,
+                    message: 'Service account JSON loaded successfully',
+                    severity: 'success',
+                });
             } catch (error) {
                 console.error('Error parsing JSON file:', error);
-                alert('Invalid JSON file. Please upload a valid Firebase service account JSON file.');
+                setSnackbar({
+                    open: true,
+                    message:
+                        'Invalid JSON file. Please upload a valid Firebase service account JSON file.',
+                    severity: 'error',
+                });
             }
         };
         reader.readAsText(file);
         setIsLoading(false);
     };
 
-    const handleSave = useCallback(() => {
+    const handleSave = useCallback(async () => {
         if (selectedConfig) {
             let updatedConfigs;
-            const existingConfigIndex = firebaseConfigs.findIndex(config => config.projectId === selectedConfig.projectId);
+            const existingConfigIndex = firebaseConfigs.findIndex(
+                (config) => config.projectId === selectedConfig.projectId
+            );
 
             if (existingConfigIndex !== -1) {
                 updatedConfigs = firebaseConfigs.map((config, index) =>
                     index === existingConfigIndex ? selectedConfig : config
                 );
             } else {
-                const newConfig = { ...selectedConfig, projectId: selectedConfig.projectId || `project-${Date.now()}` };
+                const newConfig = {
+                    ...selectedConfig,
+                    projectId: selectedConfig.projectId || `project-${Date.now()}`,
+                };
                 updatedConfigs = [...firebaseConfigs, newConfig];
             }
 
             setFirebaseConfigs(updatedConfigs);
-            store.set('firebaseConfigs', updatedConfigs);
+            await window.electronAPI.saveConfigs(updatedConfigs);
 
             handleCloseModal();
-            alert(`Firebase configuration ${existingConfigIndex !== -1 ? 'updated' : 'added'} successfully!`);
+            setSnackbar({
+                open: true,
+                message: `Firebase configuration ${existingConfigIndex !== -1 ? 'updated' : 'added'
+                    } successfully!`,
+                severity: 'success',
+            });
         } else {
-            alert('No configuration selected to save.');
+            setSnackbar({
+                open: true,
+                message: 'No configuration selected to save.',
+                severity: 'error',
+            });
         }
     }, [firebaseConfigs, selectedConfig]);
 
     const handleDelete = () => setOpenDeleteConfirm(true);
 
-    const confirmDelete = useCallback(() => {
+    const confirmDelete = useCallback(async () => {
         if (selectedConfig) {
-            const updatedConfigs = firebaseConfigs.filter((config) => config.projectId !== selectedConfig.projectId);
-            setFirebaseConfigs(updatedConfigs);
-            store.set('firebaseConfigs', updatedConfigs);
+            await window.electronAPI.deleteConfig(selectedConfig.projectId);
 
-            setOpenDeleteConfirm(false);
             handleCloseModal();
-            alert('Firebase configuration deleted successfully!');
+            setSnackbar({
+                open: true,
+                message: 'Firebase configuration deleted successfully!',
+                severity: 'success',
+            });
         } else {
-            alert('No configuration selected to delete.');
+            setSnackbar({
+                open: true,
+                message: 'No configuration selected to delete.',
+                severity: 'error',
+            });
         }
-    }, [firebaseConfigs, selectedConfig]);
+        setOpenDeleteConfirm(false);
+    }, [selectedConfig]);
 
     const handleCancelDelete = () => setOpenDeleteConfirm(false);
 
@@ -207,21 +305,23 @@ const DatabaseManagementPage = () => {
             setSelectedConfigs((prev) => [...prev, config]);
             setSelectedConfig(config);
         } else {
-            setSelectedConfigs((prev) => prev.filter((c) => c.projectId !== config.projectId));
+            setSelectedConfigs((prev) =>
+                prev.filter((c) => c.projectId !== config.projectId)
+            );
             setSelectedConfig(null);
         }
     };
 
     const truncate = (str, n) => {
-        return (str.length > n) ? str.slice(0, n - 1) + '...' : str;
+        return str.length > n ? str.slice(0, n - 1) + '...' : str;
     };
 
     const getMissingFields = (structure) => {
-        return dbSchema.filter(field => !structure.includes(field));
+        return dbSchema.filter((field) => !structure.includes(field));
     };
 
     const getExtraFields = (structure) => {
-        return structure.filter(field => !dbSchema.includes(field));
+        return structure.filter((field) => !dbSchema.includes(field));
     };
 
     const getAssumedSchema = (discrepancies) => {
@@ -229,7 +329,7 @@ const DatabaseManagementPage = () => {
 
         let maxFieldsDoc = discrepancies[0];
 
-        discrepancies.forEach(discrepancy => {
+        discrepancies.forEach((discrepancy) => {
             if (discrepancy.structure.length > maxFieldsDoc.structure.length) {
                 maxFieldsDoc = discrepancy;
             }
@@ -237,7 +337,7 @@ const DatabaseManagementPage = () => {
 
         return maxFieldsDoc.structure;
     };
-    // Function to handle schema upload
+
     const handleSchemaUpload = (event) => {
         const file = event.target.files[0];
         const reader = new FileReader();
@@ -245,130 +345,157 @@ const DatabaseManagementPage = () => {
             try {
                 const schemaContent = JSON.parse(e.target.result);
                 setDbSchema(schemaContent.fields || []);
+                setSnackbar({
+                    open: true,
+                    message: 'Schema file loaded successfully',
+                    severity: 'success',
+                });
             } catch (error) {
                 console.error('Error parsing schema file:', error);
-                alert('Invalid schema file. Please upload a valid JSON file.');
+                setSnackbar({
+                    open: true,
+                    message: 'Invalid schema file. Please upload a valid JSON file.',
+                    severity: 'error',
+                });
             }
         };
         reader.readAsText(file);
     };
 
     return (
-        <Container maxWidth="full">
+        <Container maxWidth="xl">
             <Box mt={4}>
                 <Typography variant="h4" component="h1" gutterBottom>
-                    Database Management (Locally)
+                    Database Management
                 </Typography>
 
-                <Box mt={4}>
-                    <TextField
-                        label="Collection Name"
-                        variant="outlined"
-                        value={collectionName}
-                        onChange={(e) => setCollectionName(e.target.value)}
-                        fullWidth
-                        margin="normal"
-                    />
-                    <Button
-                        sx={{ marginY: 2 }}
-                        variant="contained"
-                        color="primary"
-                        onClick={compareFirestoreData}
-                        disabled={!serviceAccount}
-                    >
-                        Fetch and Compare Documents
-                    </Button>
-                </Box>
-                <Box mt={4}>
-                    <input type="file" accept=".json" onChange={handleServiceAccountUpload} />
-                    {serviceAccount && (
-                        <Typography variant="body2" color="textSecondary">
-                            Service account JSON loaded.
-                        </Typography>
-                    )}
-                </Box>
+                <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                        <Card elevation={3}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Collection Configuration
+                                </Typography>
+                                <TextField
+                                    label="Collection Name"
+                                    variant="outlined"
+                                    value={collectionName}
+                                    onChange={(e) => setCollectionName(e.target.value)}
+                                    fullWidth
+                                    margin="normal"
+                                />
+                                <Box mt={2} display="flex" justifyContent="space-between">
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<CloudUploadIcon />}
+                                        component="label"
+                                    >
+                                        Upload Service Account
+                                        <VisuallyHiddenInput
+                                            type="file"
+                                            onChange={handleServiceAccountUpload}
+                                            accept=".json"
+                                        />
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        startIcon={<CompareIcon />}
+                                        onClick={compareFirestoreData}
+                                        disabled={!serviceAccount || isLoading}
+                                    >
+                                        Compare Documents
+                                    </Button>
+                                </Box>
+                                {serviceAccount && (
+                                    <Typography variant="body2" color="text.secondary" mt={1}>
+                                        Service account JSON loaded.
+                                    </Typography>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
 
-                {/* <Box
-                    mt={4}
-                    width={'100%'}
-                    display="flex"
-                    overflow={'auto'}
-                    flexDirection={'row'}
-                    backgroundColor={theme.palette.accentColor.main}
-                    padding={3}
-                    borderRadius={3}
-                    gap={2}
-                    sx={{
-                        scrollbarWidth: 'none',
-                        '&::-webkit-scrollbar': {
-                            display: 'none',
-                        },
-                        msOverflowStyle: 'none',
-                    }}
-                >
-                    {firebaseConfigs.map((config) => (
-                        <CustomCard
-                            key={config.projectId}
-                            data={config}
-                            selected={selectedConfigs.some(c => c.projectId === config.projectId)}
-                            onSelect={handleSelectConfig}
-                            onEdit={handleOpenModal}
-                        />
-                    ))}
-                </Box> */}
-                {/* <FirebaseConfigModal
-                    open={openModal}
-                    handleClose={handleCloseModal}
-                    firebaseConfig={selectedConfig}
-                    setFirebaseConfig={setSelectedConfig}
-                    handleSave={handleSave}
-                    handleDelete={handleDelete}
-                /> */}
-                <Dialog
-                    open={openDeleteConfirm}
-                    onClose={handleCancelDelete}
-                    aria-labelledby="confirm-delete-dialog"
-                >
-                    <DialogTitle id="confirm-delete-dialog">Confirm Deletion</DialogTitle>
-                    <DialogContent>
-                        <DialogContentText>
-                            Are you sure you want to delete this Firebase configuration? This action cannot be undone.
-                        </DialogContentText>
-                    </DialogContent>
-                    <DialogActions>
-                        <Button onClick={handleCancelDelete} color="primary">
-                            Cancel
-                        </Button>
-                        <Button onClick={confirmDelete} color="secondary">
-                            Confirm
-                        </Button>
-                    </DialogActions>
-                </Dialog>
+                    <Grid item xs={12} md={6}>
+                        <Card elevation={3}>
+                            <CardContent>
+                                <Typography variant="h6" gutterBottom>
+                                    Schema Configuration
+                                </Typography>
+                                <Box display="flex" alignItems="center" mb={2}>
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<CloudUploadIcon />}
+                                        component="label"
+                                    >
+                                        Upload Schema
+                                        <VisuallyHiddenInput
+                                            type="file"
+                                            onChange={handleSchemaUpload}
+                                            accept=".json"
+                                        />
+                                    </Button>
+                                    <Box ml={2} display="flex" alignItems="center">
+                                        <Checkbox
+                                            checked={assumeSchema}
+                                            onChange={(e) => setAssumeSchema(e.target.checked)}
+                                            color="primary"
+                                        />
+                                        <Typography variant="body2" color="text.secondary">
+                                            Assume schema from largest document
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                                {dbSchema.length > 0 && (
+                                    <Typography variant="body2" color="text.secondary">
+                                        Database schema loaded ({dbSchema.length} fields).
+                                    </Typography>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </Grid>
+                </Grid>
 
                 <Box mt={4}>
-                    <input type="file" accept=".json" onChange={handleSchemaUpload} />
-                    {dbSchema.length > 0 && (
-                        <Typography variant="body2" color="textSecondary">
-                            Database schema loaded ({dbSchema.length} fields).
-                        </Typography>
-                    )}
-                </Box>
-                <Box mt={2}>
-                    <Checkbox
-                        checked={assumeSchema}
-                        onChange={(e) => setAssumeSchema(e.target.checked)}
-                        color="primary"
-                    />
-                    <Typography variant="body2" color="textSecondary" display="inline">
-                        Assume schema based on the document with the most fields.
+                    <Typography variant="h5" gutterBottom>
+                        Firebase Configurations
                     </Typography>
+                    <Box
+                        display="flex"
+                        flexWrap="wrap"
+                        gap={2}
+                        sx={{
+                            overflowX: 'auto',
+                            '&::-webkit-scrollbar': { display: 'none' },
+                            scrollbarWidth: 'none',
+                        }}
+                    >
+                        {firebaseConfigs.map((config) => (
+                            <CustomCard
+                                key={config.projectId}
+                                data={config}
+                                selected={selectedConfigs.some(
+                                    (c) => c.projectId === config.projectId
+                                )}
+                                onSelect={handleSelectConfig}
+                                onEdit={handleOpenModal}
+                            />
+                        ))}
+                    </Box>
                 </Box>
+
+                {isLoading && <LinearProgress sx={{ my: 2 }} />}
+
                 {discrepancies && discrepancies.length > 0 ? (
                     <Box mt={4}>
                         <Card elevation={3}>
                             <CardContent>
-                                <Typography variant="h5" gutterBottom>Document Type Discrepancies</Typography>
-                                <Divider style={{ marginBottom: '1rem' }} />
+                                <Typography variant="h5" gutterBottom>
+                                    Document Type Discrepancies
+                                </Typography>
+                                <Divider sx={{ mb: 2 }} />
                                 {discrepancies.map((discrepancy, index) => (
                                     <Accordion key={index}>
                                         <AccordionSummary
@@ -384,76 +511,126 @@ const DatabaseManagementPage = () => {
                                         </AccordionSummary>
                                         <AccordionDetails>
                                             <Box mb={2}>
-                                                <Typography variant="subtitle2" gutterBottom>Structure:</Typography>
+                                                <Typography variant="subtitle2" gutterBottom>
+                                                    Structure:
+                                                </Typography>
                                                 <Box display="flex" flexWrap="wrap" gap={1}>
-                                                    {Array.isArray(discrepancy.structure) ?
-                                                        discrepancy.structure.map((item, i) => {
-                                                            if (!dbSchema.includes(item)) {
-                                                                return (
-                                                                    <Chip
-                                                                        key={`extra-${i}`}
-                                                                        label={item}
-                                                                        size="small"
-                                                                        color="warning"
-                                                                        variant="outlined"
-                                                                    />
-                                                                );
-                                                            }
-                                                            return (
+                                                    {Array.isArray(discrepancy.structure)
+                                                        ? discrepancy.structure.map((item, i) => (
+                                                            <Chip
+                                                                key={i}
+                                                                label={item}
+                                                                size="small"
+                                                                color={
+                                                                    dbSchema.includes(item)
+                                                                        ? 'default'
+                                                                        : 'warning'
+                                                                }
+                                                                variant={
+                                                                    dbSchema.includes(item)
+                                                                        ? 'default'
+                                                                        : 'outlined'
+                                                                }
+                                                            />
+                                                        ))
+                                                        : 'N/A'}
+                                                    {dbSchema.length > 0 &&
+                                                        getMissingFields(discrepancy.structure).map(
+                                                            (item, i) => (
                                                                 <Chip
-                                                                    key={i}
+                                                                    key={`missing-${i}`}
                                                                     label={item}
                                                                     size="small"
+                                                                    color="error"
+                                                                    variant="outlined"
                                                                 />
-                                                            );
-                                                        }) :
-                                                        <Typography variant="body2">N/A</Typography>
-                                                    }
-                                                    {dbSchema.length > 0 && getMissingFields(discrepancy.structure).map((item, i) => (
-                                                        <Chip
-                                                            key={`missing-${i}`}
-                                                            label={item}
-                                                            size="small"
-                                                            color="error"
-                                                            variant="outlined"
-                                                        />
-                                                    ))}
+                                                            )
+                                                        )}
                                                 </Box>
                                             </Box>
                                             <Box>
-                                                <Typography variant="subtitle2" gutterBottom>Documents: {discrepancy.documents.length}</Typography>
-                                                <Paper style={{ maxHeight: 200, overflow: 'auto', background: theme.palette.accentColor.main, padding: '8px' }}>
-                                                    {Array.isArray(discrepancy.documents) ? (
-                                                        discrepancy.documents.map((doc, i) => (
+                                                <Typography variant="subtitle2" gutterBottom>
+                                                    Documents: {discrepancy.documents.length}
+                                                </Typography>
+                                                <Paper
+                                                    sx={{
+                                                        maxHeight: 200,
+                                                        overflow: 'auto',
+                                                        bgcolor: 'background.default',
+                                                        p: 1,
+                                                    }}
+                                                >
+                                                    {Array.isArray(discrepancy.documents)
+                                                        ? discrepancy.documents.map((doc, i) => (
                                                             <Chip
                                                                 key={i}
                                                                 label={doc}
                                                                 variant="outlined"
-                                                                style={{ margin: '2px 4px' }}
+                                                                sx={{ m: 0.5 }}
                                                             />
                                                         ))
-                                                    ) : (
-                                                        <Chip label="N/A" variant="outlined" />
-                                                    )}
+                                                        : 'N/A'}
                                                 </Paper>
                                             </Box>
                                         </AccordionDetails>
-
                                     </Accordion>
                                 ))}
                             </CardContent>
                         </Card>
                     </Box>
                 ) : (
-                    <Card elevation={3} style={{ marginTop: '1rem' }}>
+                    <Card elevation={3} sx={{ mt: 2 }}>
                         <CardContent>
-                            <Typography variant="body1">No discrepancies found.</Typography>
+                            <Typography variant="body1">
+                                No discrepancies found.
+                            </Typography>
                         </CardContent>
                     </Card>
                 )}
             </Box>
+
+            <FirebaseConfigModal
+                open={openModal}
+                handleClose={handleCloseModal}
+                firebaseConfig={selectedConfig}
+                setFirebaseConfig={setSelectedConfig}
+                handleSave={handleSave}
+                handleDelete={handleDelete}
+            />
+
+            <Dialog
+                open={openDeleteConfirm}
+                onClose={handleCancelDelete}
+                aria-labelledby="confirm-delete-dialog"
+            >
+                <DialogTitle id="confirm-delete-dialog">Confirm Deletion</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to delete this Firebase configuration? This
+                        action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCancelDelete} color="primary">
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={confirmDelete}
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Snackbar
+                open={snackbar.open}
+                autoHideDuration={6000}
+                onClose={() => setSnackbar({ ...snackbar, open: false })}
+                message={snackbar.message}
+                severity={snackbar.severity}
+            />
         </Container>
     );
-};
-
-export default DatabaseManagementPage;
+}
