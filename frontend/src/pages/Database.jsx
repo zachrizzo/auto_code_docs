@@ -1,39 +1,15 @@
-// DatabaseManagementPage.jsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-    TextField,
-    Button,
-    Container,
-    Typography,
-    Box,
-    Card,
-    CardContent,
-    CardActions,
-    Checkbox,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-    Chip,
-    Divider,
-    Tooltip,
-    Paper,
-    Grid,
-    IconButton,
-    LinearProgress,
-    Snackbar,
+    TextField, Button, Container, Typography, Box, Card, CardContent, CardActions,
+    Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle,
+    Accordion, AccordionSummary, AccordionDetails, Chip, Divider, Tooltip, Paper,
+    Grid, IconButton, LinearProgress, Snackbar, Alert, Stepper, Step, StepLabel,
+    StepContent
 } from '@mui/material';
 import {
-    ExpandMore as ExpandMoreIcon,
-    CloudUpload as CloudUploadIcon,
-    Compare as CompareIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon,
+    ExpandMore as ExpandMoreIcon, CloudUpload as CloudUploadIcon,
+    Compare as CompareIcon, Delete as DeleteIcon, Edit as EditIcon,
+    Add as AddIcon, Info as InfoIcon
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
@@ -52,39 +28,37 @@ const VisuallyHiddenInput = styled('input')({
     width: 1,
 });
 
-const CustomCard = ({ data, onSelect, selected, onEdit }) => {
-    return (
-        <Card elevation={3} sx={{ minWidth: 300, m: 1 }}>
-            <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="h6" noWrap>
-                        {data.projectId}
-                    </Typography>
-                    <Checkbox
-                        checked={selected}
-                        onChange={(e) => onSelect(data, e.target.checked)}
-                    />
-                </Box>
-                <Typography color="text.secondary" noWrap>
-                    API Key: {data.apiKey}
+const CustomCard = ({ data, onSelect, selected, onEdit }) => (
+    <Card elevation={3} sx={{ minWidth: 300, m: 1 }}>
+        <CardContent>
+            <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Typography variant="h6" noWrap>
+                    {data.projectId}
                 </Typography>
-                <Typography color="text.secondary" noWrap>
-                    Auth Domain: {data.authDomain}
-                </Typography>
-            </CardContent>
-            <CardActions>
-                <Button
-                    startIcon={<EditIcon />}
-                    size="small"
-                    color="primary"
-                    onClick={() => onEdit(data)}
-                >
-                    Edit
-                </Button>
-            </CardActions>
-        </Card>
-    );
-};
+                <Checkbox
+                    checked={selected}
+                    onChange={(e) => onSelect(data, e.target.checked)}
+                />
+            </Box>
+            <Typography color="text.secondary" noWrap>
+                API Key: {data.apiKey}
+            </Typography>
+            <Typography color="text.secondary" noWrap>
+                Auth Domain: {data.authDomain}
+            </Typography>
+        </CardContent>
+        <CardActions>
+            <Button
+                startIcon={<EditIcon />}
+                size="small"
+                color="primary"
+                onClick={() => onEdit(data)}
+            >
+                Edit
+            </Button>
+        </CardActions>
+    </Card>
+);
 
 export default function DatabaseManagementPage() {
     const [firebaseConfigs, setFirebaseConfigs] = useState([]);
@@ -103,6 +77,7 @@ export default function DatabaseManagementPage() {
         message: '',
         severity: 'info',
     });
+    const [activeStep, setActiveStep] = useState(0);
 
     useEffect(() => {
         const loadConfigs = async () => {
@@ -184,6 +159,7 @@ export default function DatabaseManagementPage() {
                     message: 'Discrepancies fetched successfully',
                     severity: 'success',
                 });
+                setActiveStep(3);
             } else if (data && data.error) {
                 console.error('Error from API:', data.error);
                 setSnackbar({
@@ -224,12 +200,12 @@ export default function DatabaseManagementPage() {
                     message: 'Service account JSON loaded successfully',
                     severity: 'success',
                 });
+                setActiveStep(1);
             } catch (error) {
                 console.error('Error parsing JSON file:', error);
                 setSnackbar({
                     open: true,
-                    message:
-                        'Invalid JSON file. Please upload a valid Firebase service account JSON file.',
+                    message: 'Invalid JSON file. Please upload a valid Firebase service account JSON file.',
                     severity: 'error',
                 });
             }
@@ -263,8 +239,7 @@ export default function DatabaseManagementPage() {
             handleCloseModal();
             setSnackbar({
                 open: true,
-                message: `Firebase configuration ${existingConfigIndex !== -1 ? 'updated' : 'added'
-                    } successfully!`,
+                message: `Firebase configuration ${existingConfigIndex !== -1 ? 'updated' : 'added'} successfully!`,
                 severity: 'success',
             });
         } else {
@@ -350,6 +325,7 @@ export default function DatabaseManagementPage() {
                     message: 'Schema file loaded successfully',
                     severity: 'success',
                 });
+                setActiveStep(2);
             } catch (error) {
                 console.error('Error parsing schema file:', error);
                 setSnackbar({
@@ -361,6 +337,101 @@ export default function DatabaseManagementPage() {
         };
         reader.readAsText(file);
     };
+
+    const steps = [
+        {
+            label: 'Upload Service Account',
+            content: (
+                <Box>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<CloudUploadIcon />}
+                        component="label"
+                    >
+                        Upload Service Account
+                        <VisuallyHiddenInput
+                            type="file"
+                            onChange={handleServiceAccountUpload}
+                            accept=".json"
+                        />
+                    </Button>
+                    {serviceAccount && (
+                        <Typography variant="body2" color="text.secondary" mt={1}>
+                            Service account JSON loaded.
+                        </Typography>
+                    )}
+                </Box>
+            ),
+        },
+        {
+            label: 'Enter Collection Name',
+            content: (
+                <TextField
+                    label="Collection Name"
+                    variant="outlined"
+                    value={collectionName}
+                    onChange={(e) => {
+                        setCollectionName(e.target.value);
+                        if (e.target.value) {
+                            setActiveStep(2);
+                        }
+                    }}
+                    fullWidth
+                    margin="normal"
+                />
+            ),
+        },
+        {
+            label: 'Configure Schema',
+            content: (
+                <Box>
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<CloudUploadIcon />}
+                        component="label"
+                    >
+                        Upload Schema
+                        <VisuallyHiddenInput
+                            type="file"
+                            onChange={handleSchemaUpload}
+                            accept=".json"
+                        />
+                    </Button>
+                    <Box mt={2} display="flex" alignItems="center">
+                        <Checkbox
+                            checked={assumeSchema}
+                            onChange={(e) => setAssumeSchema(e.target.checked)}
+                            color="primary"
+                        />
+                        <Typography variant="body2" color="text.secondary">
+                            Assume schema from largest document
+                        </Typography>
+                    </Box>
+                    {dbSchema.length > 0 && (
+                        <Typography variant="body2" color="text.secondary" mt={1}>
+                            Database schema loaded ({dbSchema.length} fields).
+                        </Typography>
+                    )}
+                </Box>
+            ),
+        },
+        {
+            label: 'Compare Documents',
+            content: (
+                <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<CompareIcon />}
+                    onClick={compareFirestoreData}
+                    disabled={!serviceAccount || !collectionName || isLoading}
+                >
+                    Compare Documents
+                </Button>
+            ),
+        },
+    ];
 
     return (
         <Container maxWidth="xl">
@@ -374,45 +445,18 @@ export default function DatabaseManagementPage() {
                         <Card elevation={3}>
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
-                                    Collection Configuration
+                                    Document Comparison
                                 </Typography>
-                                <TextField
-                                    label="Collection Name"
-                                    variant="outlined"
-                                    value={collectionName}
-                                    onChange={(e) => setCollectionName(e.target.value)}
-                                    fullWidth
-                                    margin="normal"
-                                />
-                                <Box mt={2} display="flex" justifyContent="space-between">
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        startIcon={<CloudUploadIcon />}
-                                        component="label"
-                                    >
-                                        Upload Service Account
-                                        <VisuallyHiddenInput
-                                            type="file"
-                                            onChange={handleServiceAccountUpload}
-                                            accept=".json"
-                                        />
-                                    </Button>
-                                    <Button
-                                        variant="contained"
-                                        color="secondary"
-                                        startIcon={<CompareIcon />}
-                                        onClick={compareFirestoreData}
-                                        disabled={!serviceAccount || isLoading}
-                                    >
-                                        Compare Documents
-                                    </Button>
-                                </Box>
-                                {serviceAccount && (
-                                    <Typography variant="body2" color="text.secondary" mt={1}>
-                                        Service account JSON loaded.
-                                    </Typography>
-                                )}
+                                <Stepper activeStep={activeStep} orientation="vertical">
+                                    {steps.map((step, index) => (
+                                        <Step key={step.label}>
+                                            <StepLabel>{step.label}</StepLabel>
+                                            <StepContent>
+                                                {step.content}
+                                            </StepContent>
+                                        </Step>
+                                    ))}
+                                </Stepper>
                             </CardContent>
                         </Card>
                     </Grid>
@@ -421,70 +465,54 @@ export default function DatabaseManagementPage() {
                         <Card elevation={3}>
                             <CardContent>
                                 <Typography variant="h6" gutterBottom>
-                                    Schema Configuration
+                                    Firebase Configurations
                                 </Typography>
-                                <Box display="flex" alignItems="center" mb={2}>
-                                    <Button
-                                        variant="contained"
-                                        color="primary"
-                                        startIcon={<CloudUploadIcon />}
-                                        component="label"
-                                    >
-                                        Upload Schema
-                                        <VisuallyHiddenInput
-                                            type="file"
-                                            onChange={handleSchemaUpload}
-                                            accept=".json"
+                                <Box
+                                    display="flex"
+                                    flexWrap="wrap"
+                                    gap={2}
+                                    sx={{
+                                        maxHeight: '400px',
+                                        overflowY: 'auto',
+                                        '&::-webkit-scrollbar':
+                                        {
+                                            width: '0.4em'
+                                        },
+                                        '&::-webkit-scrollbar-track': {
+                                            boxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)',
+                                            webkitBoxShadow: 'inset 0 0 6px rgba(0,0,0,0.00)'
+                                        },
+                                        '&::-webkit-scrollbar-thumb': {
+                                            backgroundColor: 'rgba(0,0,0,.1)',
+                                            outline: '1px solid slategrey'
+                                        }
+                                    }}
+                                >
+                                    {firebaseConfigs.map((config) => (
+                                        <CustomCard
+                                            key={config.projectId}
+                                            data={config}
+                                            selected={selectedConfigs.some(
+                                                (c) => c.projectId === config.projectId
+                                            )}
+                                            onSelect={handleSelectConfig}
+                                            onEdit={handleOpenModal}
                                         />
-                                    </Button>
-                                    <Box ml={2} display="flex" alignItems="center">
-                                        <Checkbox
-                                            checked={assumeSchema}
-                                            onChange={(e) => setAssumeSchema(e.target.checked)}
-                                            color="primary"
-                                        />
-                                        <Typography variant="body2" color="text.secondary">
-                                            Assume schema from largest document
-                                        </Typography>
-                                    </Box>
+                                    ))}
                                 </Box>
-                                {dbSchema.length > 0 && (
-                                    <Typography variant="body2" color="text.secondary">
-                                        Database schema loaded ({dbSchema.length} fields).
-                                    </Typography>
-                                )}
+                                <Box mt={2}>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<AddIcon />}
+                                        onClick={() => handleOpenModal(null)}
+                                    >
+                                        Add New Configuration
+                                    </Button>
+                                </Box>
                             </CardContent>
                         </Card>
                     </Grid>
                 </Grid>
-
-                <Box mt={4}>
-                    <Typography variant="h5" gutterBottom>
-                        Firebase Configurations
-                    </Typography>
-                    <Box
-                        display="flex"
-                        flexWrap="wrap"
-                        gap={2}
-                        sx={{
-                            overflowX: 'auto',
-                            '&::-webkit-scrollbar': { display: 'none' },
-                            scrollbarWidth: 'none',
-                        }}
-                    >
-                        {firebaseConfigs.map((config) => (
-                            <CustomCard
-                                key={config.projectId}
-                                data={config}
-                                selected={selectedConfigs.some(
-                                    (c) => c.projectId === config.projectId
-                                )}
-                                onSelect={handleSelectConfig}
-                                onEdit={handleOpenModal}
-                            />
-                        ))}
-                    </Box>
-                </Box>
 
                 {isLoading && <LinearProgress sx={{ my: 2 }} />}
 
@@ -628,9 +656,16 @@ export default function DatabaseManagementPage() {
                 open={snackbar.open}
                 autoHideDuration={6000}
                 onClose={() => setSnackbar({ ...snackbar, open: false })}
-                message={snackbar.message}
-                severity={snackbar.severity}
-            />
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert
+                    onClose={() => setSnackbar({ ...snackbar, open: false })}
+                    severity={snackbar.severity}
+                    sx={{ width: '100%' }}
+                >
+                    {snackbar.message}
+                </Alert>
+            </Snackbar>
         </Container>
     );
 }
