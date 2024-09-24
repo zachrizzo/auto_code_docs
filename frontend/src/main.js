@@ -1,25 +1,77 @@
-// main.js
+// main.mjs
 
-const { app, BrowserWindow, session, ipcMain, dialog } = require('electron');
-const path = require('path');
-const fs = require('fs').promises;
-const { analyzeDirectory, initializeParser } = require('./utils/detector/detector.js');
-const { transformToReactFlowData } = require('./utils/transformToReactFlowData.js');
+import { app, BrowserWindow, session, ipcMain, dialog } from 'electron';
+import path from 'path';
+import { promises as fs } from 'fs';
+import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import Store from 'electron-store';
+import dotenv from 'dotenv';
+import { analyzeDirectory, initializeParser, insertCode } from '../src/utils/detector/detector.js';
+import { transformToReactFlowData } from '../src/utils/transformToReactFlowData.js';
+
+// Load environment variables from .env file (optional)
+dotenv.config();
+
+// Recreate __filename and __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Create a CommonJS `require` function for importing CommonJS modules
+const require = createRequire(import.meta.url);
+
+// Import CommonJS modules
 const electronReload = require('electron-reload');
+const squirrelStartup = require('electron-squirrel-startup');
+
+// Define root path for electron-reload
 const rootPath = path.resolve(__dirname, '../../..');
-const { insertCode } = require('./utils/codeInserter.js');
 let allowedBaseDir = ''; // Store the selected directory dynamically
 
+// Define JSON schema for validation
+const schema = {
+  firebaseConfigs: {
+    type: 'array',
+    items: {
+      type: 'object', // Keep it as an object
+      additionalProperties: true, // Allow any properties
+      properties: {
+        projectId: { type: 'string' }, // These fields are no longer required
+        apiKey: { type: 'string' },
+        authDomain: { type: 'string' },
+        // You can add more optional properties here
+      },
+    },
+  },
+};
 
-electronReload(rootPath, {
-  // Don't specify the electron path here
-  hardResetMethod: 'exit'
+
+// Initialize electron-store with schema and encryption (optional)
+const store = new Store({
+  name: 'FirebaseConfigManager',
+  schema,
+  encryptionKey: process.env.ELECTRON_STORE_ENCRYPTION_KEY, // Ensure this is set securely
+  defaults: {
+    serviceAccounts: [],
+    pastCollections: [],
+  },
 });
 
-console.log('Main process started', __dirname, path.resolve(__dirname, '../'), __filename);
+// Initialize electron-reload for development (optional)
+electronReload(rootPath, {
+  // Don't specify the electron path here
+  hardResetMethod: 'exit',
+});
+
+console.log(
+  'Main process started',
+  __dirname,
+  path.resolve(__dirname, '../'),
+  __filename
+);
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require('electron-squirrel-startup')) {
+if (squirrelStartup) {
   app.quit();
 }
 
@@ -44,20 +96,19 @@ const createWindow = () => {
           "default-src 'self'; " +
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
           "style-src 'self' 'unsafe-inline'; " +
-          "connect-src 'self' " +
-          "https://*.firebaseio.com " +
-          "https://*.googleapis.com " +
-          "https://*.gstatic.com " +
-          "https://identitytoolkit.googleapis.com " +
-          "https://securetoken.googleapis.com " +
-          "https://firestore.googleapis.com " +
-          "wss://*.firebaseio.com " +
-          "https://us-central1-auto-code-documentation.cloudfunctions.net;" // Add your Firebase Cloud Functions domain
-        ]
-      }
+          "connect-src 'self' http://127.0.0.1:8000 " +
+          'https://*.firebaseio.com ' +
+          'https://*.googleapis.com ' +
+          'https://*.gstatic.com ' +
+          'https://identitytoolkit.googleapis.com ' +
+          'https://securetoken.googleapis.com ' +
+          'https://firestore.googleapis.com ' +
+          'wss://*.firebaseio.com ' +
+          'https://us-central1-auto-code-documentation.cloudfunctions.net;', // Add your Firebase Cloud Functions domain
+        ],
+      },
     });
   });
-
 
   // Load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
@@ -66,11 +117,73 @@ const createWindow = () => {
   mainWindow.webContents.openDevTools();
 };
 
+// Handle unhandled promise rejections and exceptions
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 app.whenReady().then(() => {
   createWindow();
 
+  // IPC handler to get service accounts
+  ipcMain.handle('get-service-accounts', async () => {
+    return store.get('serviceAccounts');
+  });
+
+  // IPC handler to save service accounts
+  ipcMain.handle('save-service-accounts', async (event, configs) => {
+    store.set('serviceAccounts', configs);
+    // Notify renderer processes that service accounts have changed
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send('service-accounts-changed', configs);
+    });
+  });
+
+  ipcMain.handle('get-configs', async () => {
+    // Return the configs stored in electron-store
+    return store.get('firebaseConfigs', []);
+  });
+
+  ipcMain.handle('save-configs', async (event, configs) => {
+    // Save the configs to electron-store
+    store.set('firebaseConfigs', configs);
+    // Notify renderer processes that configs have changed
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send('configs-changed', configs);
+    });
+
+  });
+
+
+
+  // IPC handler to delete a specific service account
+  ipcMain.handle('delete-service-account', async (event, projectId) => {
+    const configs = store.get('serviceAccounts') || [];
+    const updatedConfigs = configs.filter(
+      (config) => config.content.project_id !== projectId
+    );
+    store.set('serviceAccounts', updatedConfigs);
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send('service-accounts-changed', updatedConfigs);
+    });
+  });
+
+  // IPC handler for past collections
+  ipcMain.handle('get-past-collections', async () => {
+    return store.get('pastCollections', []);
+  });
+
+  ipcMain.handle('save-past-collections', async (event, collections) => {
+    store.set('pastCollections', collections);
+  });
+
+  // IPC handler for selecting a directory
   ipcMain.handle('initialize-parser', async () => {
     try {
       await initializeParser();
@@ -134,7 +247,6 @@ app.whenReady().then(() => {
       return { success: false, error: error.message };
     }
   });
-
   ipcMain.handle('select-directory', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory']
@@ -146,7 +258,7 @@ app.whenReady().then(() => {
     }
   });
 
-  // Add the 'get-file-content' handler
+  // IPC handler for getting file content
   ipcMain.handle('get-file-content', async (event, filePath) => {
     console.log('Main: get-file-content invoked', { filePath }); // Debugging log
     try {
@@ -158,9 +270,8 @@ app.whenReady().then(() => {
       const resolvedPath = path.resolve(filePath);
 
       // Security check: ensure that the file is within an allowed directory
-
       if (!resolvedPath.startsWith(allowedBaseDir)) {
-        throw new Error('Access to the specified file is not allowed.', allowedBaseDir, resolvedPath);
+        throw new Error('Access to the specified file is not allowed.');
       }
 
       const content = await fs.readFile(resolvedPath, 'utf-8');
@@ -171,9 +282,7 @@ app.whenReady().then(() => {
     }
   });
 
-
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // On macOS, recreate a window when the dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();

@@ -23,6 +23,7 @@ import { onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth meth
 import Login from './pages/LoginPage.jsx';
 import { auth } from './firebase/firebase.js';
 import Home from './pages/Home.jsx';
+import DatabaseManagementPage from './pages/Database.jsx';
 
 
 const lightThemeColors = {
@@ -339,6 +340,7 @@ function App() {
                     />
                     {/* Additional routes for other components */}
                     <Route path="login" element={<Login />} />
+                    <Route path="database" element={<DatabaseManagementPage />} />
                     <Route path="signup" element={<SignUp />} />
                 </Routes>
             </HashRouter>

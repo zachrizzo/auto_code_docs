@@ -1,6 +1,4 @@
-// src/components/Login.js
-
-import React, { useState, Suspense } from 'react';
+import React, { useState } from 'react';
 import {
     TextField,
     Button,
@@ -21,21 +19,16 @@ import {
     Visibility,
     VisibilityOff,
 } from '@mui/icons-material';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'firebase/auth'; // Import setPersistence
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { auth } from '../firebase/firebase';
-import { Canvas, } from '@react-three/fiber';
-import FractalLightDisplay from '../components/threeJS/FractalLightDisplay';
+import { auth } from '../firebase/firebase'; // Import auth from your firebase config
 
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-
     const [showPassword, setShowPassword] = useState(false);
-
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [snackbarSeverity, setSnackbarSeverity] = useState('success');
@@ -48,13 +41,19 @@ const Login = () => {
         setIsLoading(true);
 
         try {
+            // Set persistence mode (you can change it to session or none as per your needs)
+            await setPersistence(auth, browserLocalPersistence); // Ensures the auth state persists locally
+
+            // Sign in user using Firebase Authentication
             await signInWithEmailAndPassword(auth, email, password);
+
             setSnackbarMessage('Login successful!');
             setSnackbarSeverity('success');
             setSnackbarOpen(true);
+
             // Redirect after a short delay to allow the snackbar to display
             setTimeout(() => {
-                navigate('/'); // Redirect to dashboard after successful login
+                navigate('/'); // Redirect to home after successful login
             }, 1500);
         } catch (error) {
             console.error('Error signing in:', error);
@@ -97,45 +96,6 @@ const Login = () => {
                 overflow: 'hidden',
             }}
         >
-            <Canvas
-                camera={{ position: [0, 0, 10], fov: 50 }}
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    zIndex: 0,
-                }}
-                gl={{
-                    antialias: true,
-                    alpha: true, // Enable transparency
-                    clearColor: '#00000000', // Fully transparent background
-                }}
-            >
-                <Suspense fallback={null}>
-                    {/* Ambient Light for general illumination */}
-                    <ambientLight intensity={0.2} />
-
-                    {/* Colored Spotlights */}
-                    <FractalLightDisplay />
-                </Suspense>
-            </Canvas>
-
-
-            {/* Overlay to darken the canvas for better readability */}
-            <Box
-                sx={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    // backgroundColor: 'rgba(0, 0, 0, 0.6)', // Adjust opacity as needed
-                    zIndex: 1,
-                }}
-            />
-
             {/* Login Form */}
             <Container
                 component="main"
@@ -159,8 +119,8 @@ const Login = () => {
                         flexDirection: 'column',
                         alignItems: 'center',
                         borderRadius: 2,
-                        backgroundColor: 'rgba(255, 255, 255, 0.15)', // More transparent for better blend
-                        backdropFilter: 'blur(10px)', // Blur effect for readability
+                        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                        backdropFilter: 'blur(10px)',
                         boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
                         border: '1px solid rgba(255, 255, 255, 0.18)',
                     }}
@@ -260,19 +220,6 @@ const Login = () => {
                                     }}
                                 />
                             </Grid>
-
-                            {/* Forgot Password Link */}
-                            <Grid item xs={12}>
-                                <Link
-                                    component={RouterLink}
-                                    to="/forgot-password"
-                                    variant="body2"
-                                    underline="hover"
-                                    sx={{ color: '#ffffff' }}
-                                >
-                                    Forgot your password?
-                                </Link>
-                            </Grid>
                         </Grid>
 
                         {/* Log In Button */}
@@ -314,9 +261,8 @@ const Login = () => {
                     </Box>
                 </Paper>
             </Container>
-        </Box >
+        </Box>
     );
-
 };
 
 export default Login;

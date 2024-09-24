@@ -6,10 +6,10 @@
   "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",
-    "rebuild": "electron-rebuild -f -w tree-sitter",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "rebuild": "electron-rebuild -f -w tree-sitter",
     "lint": "echo \"No linting configured\"",
     "backend": "cd ../backend && python3 server.py"
   },
@@ -90,6 +90,7 @@
     "assert": "^2.1.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.0",
+    "dotenv": "^16.4.5",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.0.0",
     "elkjs": "^0.9.3",
