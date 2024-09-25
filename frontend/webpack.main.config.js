@@ -9,14 +9,6 @@ module.exports = {
     rules: require('./webpack.rules'),
   },
 
-  experiments: {
-    asyncWebAssembly: true
-  },
-
-  devServer: {
-    historyApiFallback: true,  // This tells Webpack to serve index.html for all 404 routes
-  },
-
   plugins: [
     new NodePolyfillPlugin(),
     new CopyWebpackPlugin({
@@ -39,5 +31,5 @@ module.exports = {
       fs: false,  // Disable fs, since it’s not needed for the browser
       path: require.resolve("path-browserify")  // Resolve path using path-browserify
     }
-  }
+  },
 };

@@ -1,6 +1,7 @@
 const rules = require('./webpack.rules');
 const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
-
+const CopyWebpackPlugin = require('copy-webpack-plugin');
+const path = require('path');  // Add path module import here
 
 rules.push({
   test: /\.css$/,
@@ -13,21 +14,22 @@ module.exports = {
     rules,
   },
   plugins: [
-    new NodePolyfillPlugin()
+    new NodePolyfillPlugin(),
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, '../frontend/.wasm'),  // Source folder with .wasm files
+          to: path.resolve(__dirname, '../frontend/.webpack/main')  // Destination folder in .webpack/main
+        }
+      ]
+    })
   ],
   resolve: {
     fallback: {
       "fs": false,
       "path": require.resolve("path-browserify")
-    }
-  },
-  resolve: {
-    fallback: {
-      fs: false, // Don't bundle fs in the renderer
-      path: require.resolve("path-browserify"), // Use a browser polyfill for path
     },
-  },
-  resolve: {
     extensions: ['.js', '.jsx'],
   },
+
 };

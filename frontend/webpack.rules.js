@@ -26,11 +26,7 @@ module.exports = [
       }
     }
   },
-  {
-    test: /\.wasm$/,
-    loader: "file-loader",
-    type: "javascript/auto"
-  }
+
 
   // Put your webpack loader rules in this array.  This is where you would put
   // your ts-loader configuration for instance:

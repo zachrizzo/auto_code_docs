@@ -1,11 +1,11 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
-const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
 module.exports = {
   packagerConfig: {
     asar: true,
     asarUnpack: "**/*.wasm"
+
   },
   rebuildConfig: {},
   makers: [
@@ -48,15 +48,6 @@ module.exports = {
             },
           ],
         },
-        plugins: [
-          new NodePolyfillPlugin()
-        ],
-        resolve: {
-          fallback: {
-            "fs": false,
-            "path": require.resolve("path-browserify")
-          }
-        }
       },
     },
     // Fuses are used to enable/disable various Electron functionality

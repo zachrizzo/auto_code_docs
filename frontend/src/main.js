@@ -1,7 +1,7 @@
 import { app, BrowserWindow, session, ipcMain, dialog } from 'electron';
-import path from 'path';
+
+import path from 'node:path';
 import { promises as fs } from 'fs';
-import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import Store from 'electron-store';
 import dotenv from 'dotenv';
@@ -10,24 +10,29 @@ import { transformToReactFlowData } from '../src/utils/transformToReactFlowData.
 
 // Load environment variables from .env file (optional)
 dotenv.config();
-
-// Recreate __filename and __dirname in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Create a CommonJS `require` function for importing CommonJS modules
-const require = createRequire(import.meta.url);
+let allowedBaseDir = ''; // Initialize allowedBaseDir
 
 // Conditionally load `electron-reload` only during development
 if (process.env.NODE_ENV === 'development') {
-  const electronReload = require('electron-reload');
-  const rootPath = path.resolve(__dirname, '../../..');
-  electronReload(rootPath, {
-    hardResetMethod: 'exit',
+  import('electron-reload').then((electronReload) => {
+    const rootPath = path.resolve(__dirname, '../../..');
+    electronReload.default(rootPath, {
+      hardResetMethod: 'exit',
+    });
   });
 }
 
-const squirrelStartup = require('electron-squirrel-startup');
+// Replace require('electron-squirrel-startup') with dynamic import
+let squirrelStartup = false;
+if (process.platform === 'win32') {
+  import('electron-squirrel-startup').then((module) => {
+    squirrelStartup = module.default;
+    if (squirrelStartup) {
+      app.quit();
+    }
+  });
+}
+
 
 // Define JSON schema for validation
 const schema = {
@@ -44,6 +49,9 @@ const schema = {
     },
   },
 };
+
+console.log('Loading URL:', path.join(__dirname, './index.html'));
+
 
 // Initialize electron-store with schema and encryption (optional)
 let store;
@@ -74,13 +82,6 @@ try {
   });
 }
 
-console.log(
-  'Main process started',
-  __dirname,
-  path.resolve(__dirname, '../'),
-  __filename
-);
-
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (squirrelStartup) {
   app.quit();
@@ -91,6 +92,7 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
+    title: 'Fractal X',
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       contextIsolation: true,  // Enable context isolation for security
@@ -98,7 +100,6 @@ const createWindow = () => {
     },
   });
 
-  // Set Content Security Policy
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -121,29 +122,20 @@ const createWindow = () => {
     });
   });
 
-  // Load the index.html of the app.
+
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools during development only
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
+  // Open the DevTools.
+  mainWindow.webContents.openDevTools();
 };
-
-// Handle unhandled promise rejections and exceptions
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
+// Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
 
+  // On OS X it's common to re-create a window in the app when the
   // IPC handler to get service accounts
   ipcMain.handle('get-service-accounts', async () => {
     return store.get('serviceAccounts');
@@ -293,8 +285,7 @@ app.whenReady().then(() => {
       return { success: false, error: error.message };
     }
   });
-
-  // On macOS, recreate a window when the dock icon is clicked and there are no other windows open.
+  // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -302,9 +293,14 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS.
+// Quit when all windows are closed, except on macOS. There, it's common
+// for applications and their menu bar to stay active until the user quits
+// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
+
+// In this file you can include the rest of your app's specific main process
+// code. You can also put them in separate files and import them here.

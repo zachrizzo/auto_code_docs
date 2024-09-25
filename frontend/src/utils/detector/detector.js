@@ -29,9 +29,9 @@ export async function initializeParser() {
     const parser = new Parser();
 
     // Load the WebAssembly files correctly for each language
-    const JavaScript = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-javascript.wasm'));
-    const Python = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-python.wasm'));
-    const Julia = await Parser.Language.load(require('path').join(__dirname, '../../.wasm/tree-sitter-julia.wasm'));  // Added Julia
+    const JavaScript = await Parser.Language.load(require('path').join(__dirname, '../../.webpack/main/tree-sitter-javascript.wasm'));
+    const Python = await Parser.Language.load(require('path').join(__dirname, '../../.webpack/main/tree-sitter-python.wasm'));
+    const Julia = await Parser.Language.load(require('path').join(__dirname, '../../.webpack/main/tree-sitter-julia.wasm'));  // Added Julia
 
     // Set the language for the parser
     parser.setLanguage(JavaScript);  // Default language can be changed dynamically
