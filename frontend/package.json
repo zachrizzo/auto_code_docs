@@ -1,17 +1,18 @@
 {
-  "name": "my-app",
-  "productName": "my-app",
+  "name": "fractal-x",
+  "productName": "Fractal X",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Ai code mapping and documentation tool",
   "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
-    "publish": "electron-forge publish",
+    "package": "NODE_ENV=production electron-forge package",
+    "make": "NODE_ENV=production electron-forge make",
+    "publish": "NODE_ENV=production electron-forge publish",
     "rebuild": "electron-rebuild -f -w tree-sitter",
     "lint": "echo \"No linting configured\"",
-    "backend": "cd ../backend && python3 server.py"
+    "backend": "cd ../backend && python3 server.py",
+    "clean": "rm -rf node_modules && rm -rf package-lock.json "
   },
   "tree-sitter": [
     {

@@ -21,13 +21,15 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import SettingsIcon from '@mui/icons-material/Settings';
 import MenuIcon from '@mui/icons-material/Menu';
-import SettingsPanel from '../settings/SettingPanel';
+import SettingsPanel from '../../settings/SettingPanel';
 import PropTypes from 'prop-types';
 import { Code } from '@mui/icons-material';
+import NavigationDrawer from './NavigationDrawer';
 
 const Header = ({ darkMode, toggleDarkMode }) => {
     const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
     const [mobileMoreAnchorEl, setMobileMoreAnchorEl] = useState(null);
+    const [drawerOpen, setDrawerOpen] = useState(false);
     const [settings, setSettings] = useState({
         autoGetDocs: true,
         docLength: 5,
@@ -55,6 +57,10 @@ const Header = ({ darkMode, toggleDarkMode }) => {
 
     const handleMobileMenuClose = () => {
         setMobileMoreAnchorEl(null);
+    };
+
+    const handleToggleDrawer = () => {
+        setDrawerOpen(!drawerOpen);
     };
 
     const handleToggle = (setting) => {
@@ -112,11 +118,19 @@ const Header = ({ darkMode, toggleDarkMode }) => {
 
     return (
         <>
-            <AppBar
-                position="static"
-
-            >
+            <AppBar position="static">
                 <Toolbar>
+                    {/* Menu Button */}
+                    <IconButton
+                        edge="start"
+                        color="inherit"
+                        aria-label="menu"
+                        onClick={handleToggleDrawer}
+                        sx={{ mr: 2 }}
+                    >
+                        <MenuIcon />
+                    </IconButton>
+
                     {/* Logo Section */}
                     <Box
                         component={RouterLink}
@@ -128,7 +142,6 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                             color: 'inherit',
                         }}
                     >
-                        {/* Replace with your logo if available */}
                         <Code sx={{ mr: 1, fontSize: 30 }} />
                         <Tooltip title="Home">
                             <Typography variant="h6" noWrap>
@@ -153,7 +166,6 @@ const Header = ({ darkMode, toggleDarkMode }) => {
                                     <SettingsIcon />
                                 </IconButton>
                             </Tooltip>
-
                         </Box>
                     )}
 
@@ -178,6 +190,9 @@ const Header = ({ darkMode, toggleDarkMode }) => {
             {/* Mobile Menu */}
             {renderMobileMenu}
 
+            {/* Navigation Drawer */}
+            <NavigationDrawer open={drawerOpen} onClose={handleToggleDrawer} />
+
             {/* Settings Panel */}
             <SettingsPanel
                 anchorEl={settingsAnchorEl}
@@ -189,7 +204,11 @@ const Header = ({ darkMode, toggleDarkMode }) => {
             />
         </>
     );
+};
 
+Header.propTypes = {
+    darkMode: PropTypes.bool.isRequired,
+    toggleDarkMode: PropTypes.func.isRequired,
 };
 
 export default Header;

@@ -1,5 +1,3 @@
-// main.mjs
-
 import { app, BrowserWindow, session, ipcMain, dialog } from 'electron';
 import path from 'path';
 import { promises as fs } from 'fs';
@@ -20,48 +18,61 @@ const __dirname = path.dirname(__filename);
 // Create a CommonJS `require` function for importing CommonJS modules
 const require = createRequire(import.meta.url);
 
-// Import CommonJS modules
-const electronReload = require('electron-reload');
-const squirrelStartup = require('electron-squirrel-startup');
+// Conditionally load `electron-reload` only during development
+if (process.env.NODE_ENV === 'development') {
+  const electronReload = require('electron-reload');
+  const rootPath = path.resolve(__dirname, '../../..');
+  electronReload(rootPath, {
+    hardResetMethod: 'exit',
+  });
+}
 
-// Define root path for electron-reload
-const rootPath = path.resolve(__dirname, '../../..');
-let allowedBaseDir = ''; // Store the selected directory dynamically
+const squirrelStartup = require('electron-squirrel-startup');
 
 // Define JSON schema for validation
 const schema = {
   firebaseConfigs: {
     type: 'array',
     items: {
-      type: 'object', // Keep it as an object
-      additionalProperties: true, // Allow any properties
+      type: 'object',
+      additionalProperties: true,
       properties: {
-        projectId: { type: 'string' }, // These fields are no longer required
+        projectId: { type: 'string' },
         apiKey: { type: 'string' },
         authDomain: { type: 'string' },
-        // You can add more optional properties here
       },
     },
   },
 };
 
-
 // Initialize electron-store with schema and encryption (optional)
-const store = new Store({
-  name: 'FirebaseConfigManager',
-  schema,
-  encryptionKey: process.env.ELECTRON_STORE_ENCRYPTION_KEY, // Ensure this is set securely
-  defaults: {
-    serviceAccounts: [],
-    pastCollections: [],
-  },
-});
-
-// Initialize electron-reload for development (optional)
-electronReload(rootPath, {
-  // Don't specify the electron path here
-  hardResetMethod: 'exit',
-});
+let store;
+try {
+  store = new Store({
+    name: 'FirebaseConfigManager',
+    schema,
+    encryptionKey: process.env.ELECTRON_STORE_ENCRYPTION_KEY,
+    defaults: {
+      serviceAccounts: [],
+      pastCollections: [],
+      firebaseConfigs: [],
+    },
+  });
+  console.log('Store initialized successfully');
+} catch (error) {
+  console.error('Error initializing store:', error);
+  // Optionally, reset the store or notify the user
+  store = new Store({
+    name: 'FirebaseConfigManager',
+    schema,
+    encryptionKey: process.env.ELECTRON_STORE_ENCRYPTION_KEY,
+    defaults: {
+      serviceAccounts: [],
+      pastCollections: [],
+      firebaseConfigs: [],
+    },
+  });
+}
 
 console.log(
   'Main process started',
@@ -113,8 +124,10 @@ const createWindow = () => {
   // Load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // Open the DevTools during development only
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.webContents.openDevTools();
+  }
 };
 
 // Handle unhandled promise rejections and exceptions
@@ -157,7 +170,6 @@ app.whenReady().then(() => {
     BrowserWindow.getAllWindows().forEach((window) => {
       window.webContents.send('configs-changed', configs);
     });
-
   });
 
 

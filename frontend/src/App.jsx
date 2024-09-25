@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { GlobalStyles } from '@mui/system';
 import Analyzer from './pages/Analyzer.jsx';
-import Header from './components/layout/Header.jsx';
+import Header from './components/layout/header/Header.jsx';
 // import DatabaseManagementPage from './pages/Database.jsx';
 import SignUp from './pages/SignUp.jsx';
 import { onAuthStateChanged } from 'firebase/auth'; // Import Firebase auth methods
