@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     TextField, Button, Container, Typography, Box, Card, CardContent,
-    List, ListItem, ListItemText, Accordion, AccordionSummary, AccordionDetails,
+    Accordion, AccordionSummary, AccordionDetails,
     Chip, Divider, LinearProgress, Snackbar, Alert, Stepper,
     Step, StepLabel, StepContent, Dialog, DialogTitle, DialogContent, DialogContentText,
     DialogActions, RadioGroup, FormControlLabel, Radio, Tooltip,
@@ -13,6 +13,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 
+// Styled component for hidden file input
 const VisuallyHiddenInput = styled('input')({
     clip: 'rect(0 0 0 0)',
     clipPath: 'inset(50%)',
@@ -45,6 +46,7 @@ export default function DatabaseManagementPage() {
 
     // Schema-related state
     const [schemaOption, setSchemaOption] = useState('assume'); // 'assume', 'upload', 'type'
+    const [autoSchemaOption, setAutoSchemaOption] = useState('mostDocs'); // 'mostDocs', 'mostFields'
     const [schema, setSchema] = useState(null);
     const [typedSchema, setTypedSchema] = useState('');
     const schemaFileInputRef = useRef(null);
@@ -54,8 +56,17 @@ export default function DatabaseManagementPage() {
 
     useEffect(() => {
         const loadServiceAccounts = async () => {
-            const savedAccounts = await window.electronAPI.getServiceAccounts();
-            setServiceAccounts(Array.isArray(savedAccounts) ? savedAccounts : []);
+            try {
+                const savedAccounts = await window.electronAPI.getServiceAccounts();
+                setServiceAccounts(Array.isArray(savedAccounts) ? savedAccounts : []);
+            } catch (error) {
+                console.error('Error loading service accounts:', error);
+                setSnackbar({
+                    open: true,
+                    message: 'Failed to load service accounts.',
+                    severity: 'error',
+                });
+            }
         };
 
         loadServiceAccounts();
@@ -70,14 +81,13 @@ export default function DatabaseManagementPage() {
         window.electronAPI.onServiceAccountsChanged(handleServiceAccountsChanged);
 
         return () => {
-            // Note: contextBridge does not support removing listeners directly.
-            // If you need to remove the listener, you can implement a remove handler in the preload script.
+            // Cleanup if necessary
         };
     }, []);
 
     const handleServiceAccountUpload = (event) => {
         setIsLoading(true);
-        const file = event.target.files[0];
+        const file = event.target.files?.[0];
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
@@ -102,7 +112,7 @@ export default function DatabaseManagementPage() {
                 });
             } finally {
                 setIsLoading(false);
-                event.target.value = null;
+                if (event.target) event.target.value = '';
             }
         };
         if (file) {
@@ -140,7 +150,7 @@ export default function DatabaseManagementPage() {
 
     const handleSchemaFileUpload = (event) => {
         setIsLoading(true);
-        const file = event.target.files[0];
+        const file = event.target.files?.[0];
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
@@ -160,7 +170,7 @@ export default function DatabaseManagementPage() {
                 });
             } finally {
                 setIsLoading(false);
-                event.target.value = null;
+                if (event.target) event.target.value = '';
             }
         };
         if (file) {
@@ -192,23 +202,6 @@ export default function DatabaseManagementPage() {
             return;
         }
 
-        let finalSchema = null;
-        if (schemaOption === 'upload' && schema) {
-            finalSchema = schema;
-        } else if (schemaOption === 'type' && typedSchema) {
-            try {
-                finalSchema = JSON.parse(typedSchema);
-            } catch (error) {
-                setSnackbar({
-                    open: true,
-                    message: 'Invalid typed schema JSON.',
-                    severity: 'error',
-                });
-                setIsLoading(false);
-                return;
-            }
-        }
-
         try {
             const response = await fetch('http://127.0.0.1:8000/compare-documents', {
                 method: 'POST',
@@ -218,7 +211,7 @@ export default function DatabaseManagementPage() {
                 body: JSON.stringify({
                     collection_name: collectionName,
                     service_account: selectedServiceAccount.content,
-                    schema: finalSchema, // Include schema if provided
+                    schema: null, // We will handle schema in frontend
                 }),
             });
 
@@ -229,7 +222,75 @@ export default function DatabaseManagementPage() {
             const data = await response.json();
 
             if (data && data.discrepancies) {
-                setDiscrepancies(data.discrepancies);
+                let schemaFields = [];
+
+                if (schemaOption === 'assume') {
+                    if (autoSchemaOption === 'mostDocs') {
+                        // Find the discrepancy with the most documents
+                        let maxDocs = 0;
+                        data.discrepancies.forEach((discrepancy) => {
+                            if (discrepancy.documents.length > maxDocs) {
+                                maxDocs = discrepancy.documents.length;
+                                schemaFields = discrepancy.structure;
+                            }
+                        });
+                    } else if (autoSchemaOption === 'mostFields') {
+                        // Find the discrepancy with the most fields
+                        let maxFields = 0;
+                        data.discrepancies.forEach((discrepancy) => {
+                            if (discrepancy.structure.length > maxFields) {
+                                maxFields = discrepancy.structure.length;
+                                schemaFields = discrepancy.structure;
+                            }
+                        });
+                    }
+                } else if (schemaOption === 'upload' && schema) {
+                    schemaFields = Object.keys(schema);
+                } else if (schemaOption === 'type' && typedSchema) {
+                    try {
+                        const parsedSchema = JSON.parse(typedSchema);
+                        schemaFields = Object.keys(parsedSchema);
+                    } catch (error) {
+                        setSnackbar({
+                            open: true,
+                            message: 'Invalid typed schema JSON.',
+                            severity: 'error',
+                        });
+                        setIsLoading(false);
+                        return;
+                    }
+                }
+
+                if (schemaFields.length === 0) {
+                    setSnackbar({
+                        open: true,
+                        message: 'No schema fields determined.',
+                        severity: 'error',
+                    });
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Process each discrepancy
+                const updatedDiscrepancies = data.discrepancies.map((discrepancy) => {
+                    const documentFields = discrepancy.structure || [];
+
+                    const missingFields = schemaFields.filter(field => !documentFields.includes(field));
+                    const extraFields = documentFields.filter(field => !schemaFields.includes(field));
+                    const matchingFields = documentFields.filter(field => schemaFields.includes(field));
+
+                    return {
+                        type: discrepancy.type || 'Unknown',
+                        missingFields,
+                        extraFields,
+                        matchingFields,
+                        documents: discrepancy.documents || [],
+                        schemaFields,
+                        documentFields,
+                    };
+                });
+
+                setDiscrepancies(updatedDiscrepancies);
                 setSnackbar({
                     open: true,
                     message: 'Discrepancies fetched successfully',
@@ -270,23 +331,32 @@ export default function DatabaseManagementPage() {
 
     const handleDeleteServiceAccount = async () => {
         if (selectedServiceAccount) {
-            await window.electronAPI.deleteServiceAccount(selectedServiceAccount.content.project_id);
-            setSnackbar({
-                open: true,
-                message: 'Service account deleted successfully',
-                severity: 'success',
-            });
-            setSelectedServiceAccount(null);
-            setOpenDeleteConfirm(false);
+            try {
+                await window.electronAPI.deleteServiceAccount(selectedServiceAccount.content.project_id);
+                setSnackbar({
+                    open: true,
+                    message: 'Service account deleted successfully',
+                    severity: 'success',
+                });
+                setSelectedServiceAccount(null);
+                setOpenDeleteConfirm(false);
+            } catch (error) {
+                console.error('Error deleting service account:', error);
+                setSnackbar({
+                    open: true,
+                    message: 'Failed to delete service account.',
+                    severity: 'error',
+                });
+            }
         }
     };
 
     const handleNext = () => {
-        setActiveStep((prevActiveStep) => prevActiveStep + 1);
+        setActiveStep(prevActiveStep => prevActiveStep + 1);
     };
 
     const handleBack = () => {
-        setActiveStep((prevActiveStep) => prevActiveStep - 1);
+        setActiveStep(prevActiveStep => prevActiveStep - 1);
     };
 
     const steps = [
@@ -330,7 +400,12 @@ export default function DatabaseManagementPage() {
                                     <MenuItem key={index} value={account}>
                                         {account?.name?.length > 20 ? (
                                             <Tooltip title={account.name}>
-                                                <Typography noWrap>{account.name}</Typography>
+                                                <Typography
+                                                    noWrap
+                                                    sx={{ maxWidth: '200px' }}
+                                                >
+                                                    {account.name}
+                                                </Typography>
                                             </Tooltip>
                                         ) : (
                                             account.name
@@ -464,6 +539,30 @@ export default function DatabaseManagementPage() {
                             label="Type Schema"
                         />
                     </RadioGroup>
+
+                    {schemaOption === 'assume' && (
+                        <Box mt={2}>
+                            <Typography variant="body1" gutterBottom>
+                                Choose how to determine the schema:
+                            </Typography>
+                            <RadioGroup
+                                value={autoSchemaOption}
+                                onChange={(e) => setAutoSchemaOption(e.target.value)}
+                            >
+                                <FormControlLabel
+                                    value="mostDocs"
+                                    control={<Radio />}
+                                    label="Use document type with most documents"
+                                />
+                                <FormControlLabel
+                                    value="mostFields"
+                                    control={<Radio />}
+                                    label="Use document type with most fields"
+                                />
+                            </RadioGroup>
+                        </Box>
+                    )}
+
                     {schemaOption === 'upload' && (
                         <Box mt={2}>
                             <Button
@@ -543,7 +642,7 @@ export default function DatabaseManagementPage() {
             label: 'Results',
             content: (
                 <Box>
-                    {discrepancies && discrepancies?.length > 0 ? (
+                    {discrepancies && discrepancies.length > 0 ? (
                         <Typography variant="body1">See the discrepancies below.</Typography>
                     ) : (
                         <Typography variant="body1">No discrepancies found.</Typography>
@@ -560,6 +659,20 @@ export default function DatabaseManagementPage() {
             ),
         },
     ];
+
+    // Function to determine chip color based on status
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Matching':
+                return 'default'; // White
+            case 'Missing':
+                return 'error'; // Red
+            case 'Extra':
+                return 'warning'; // Yellow
+            default:
+                return 'default';
+        }
+    };
 
     return (
         <Container maxWidth="md">
@@ -585,7 +698,7 @@ export default function DatabaseManagementPage() {
 
                 {isLoading && <LinearProgress sx={{ my: 2 }} />}
 
-                {discrepancies && discrepancies?.length > 0 && (
+                {activeStep === 4 && discrepancies && discrepancies.length > 0 && (
                     <Box mt={4}>
                         <Card elevation={3}>
                             <CardContent>
@@ -597,77 +710,96 @@ export default function DatabaseManagementPage() {
                                     <Accordion key={index}>
                                         <AccordionSummary
                                             expandIcon={<ExpandMoreIcon />}
-                                            aria-controls={`panel${index}a-content`}
-                                            id={`panel${index}a-header`}
+                                            aria-controls={`panel${index}-content`}
+                                            id={`panel${index}-header`}
                                         >
                                             <Tooltip title={discrepancy.type || 'Unknown'}>
-                                                <Typography variant="subtitle1" noWrap>
+                                                <Typography
+                                                    variant="subtitle1"
+                                                    noWrap
+                                                    sx={{
+                                                        maxWidth: '200px',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                    }}
+                                                >
                                                     Document Type: {discrepancy.type || 'Unknown'}
                                                 </Typography>
                                             </Tooltip>
                                         </AccordionSummary>
                                         <AccordionDetails>
-                                            {discrepancy.missingFields && discrepancy.missingFields?.length > 0 && (
-                                                <Box mb={2}>
-                                                    <Typography variant="subtitle2" gutterBottom>
-                                                        Missing Fields:
-                                                    </Typography>
-                                                    <Box display="flex" flexWrap="wrap" gap={1}>
-                                                        {discrepancy.missingFields.map((field, i) => (
-                                                            <Chip
-                                                                key={i}
-                                                                label={field}
-                                                                size="small"
-                                                                color="error"
-                                                                variant="outlined"
-                                                            />
-                                                        ))}
-                                                    </Box>
+                                            {/* Fields Display */}
+                                            <Box mb={2}>
+                                                <Typography variant="subtitle2" gutterBottom>
+                                                    Fields:
+                                                </Typography>
+                                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                                    {/* Matching Fields - White Chips */}
+                                                    {discrepancy.matchingFields && discrepancy.matchingFields.map((field, i) => (
+                                                        <Chip
+                                                            key={`matching-${i}`}
+                                                            label={field}
+                                                            color={getStatusColor('Matching')}
+                                                            variant="outlined"
+                                                            size="small"
+                                                        />
+                                                    ))}
+                                                    {/* Missing Fields - Red Chips */}
+                                                    {discrepancy.missingFields && discrepancy.missingFields.map((field, i) => (
+                                                        <Chip
+                                                            key={`missing-${i}`}
+                                                            label={field}
+                                                            color={getStatusColor('Missing')}
+                                                            variant="outlined"
+                                                            size="small"
+                                                        />
+                                                    ))}
+                                                    {/* Extra Fields - Yellow Chips */}
+                                                    {discrepancy.extraFields && discrepancy.extraFields.map((field, i) => (
+                                                        <Chip
+                                                            key={`extra-${i}`}
+                                                            label={field}
+                                                            color={getStatusColor('Extra')}
+                                                            variant="outlined"
+                                                            size="small"
+                                                        />
+                                                    ))}
                                                 </Box>
-                                            )}
-                                            {discrepancy?.extraFields && discrepancy?.extraFields?.length > 0 && (
-                                                <Box mb={2}>
-                                                    <Typography variant="subtitle2" gutterBottom>
-                                                        Extra Fields:
-                                                    </Typography>
-                                                    <Box display="flex" flexWrap="wrap" gap={1}>
-                                                        {discrepancy.extraFields.map((field, i) => (
-                                                            <Chip
-                                                                key={i}
-                                                                label={field}
-                                                                size="small"
-                                                                color="warning"
-                                                                variant="outlined"
-                                                            />
-                                                        ))}
-                                                    </Box>
-                                                </Box>
-                                            )}
+                                            </Box>
+
+                                            {/* Affected Documents as Chips */}
                                             <Box>
                                                 <Typography variant="subtitle2" gutterBottom>
-                                                    Documents: {discrepancy?.documents?.length}
+                                                    Affected Documents ({discrepancy.documents.length}):
                                                 </Typography>
-                                                <Box
-                                                    sx={{
-                                                        maxHeight: 200,
-                                                        overflowY: 'auto',
-                                                        border: '1px solid #ccc',
-                                                        borderRadius: 1,
-                                                        p: 1,
-                                                    }}
-                                                >
-                                                    <List dense>
-                                                        {discrepancy.documents.map((doc, i) => (
-                                                            <ListItem key={i}>
-                                                                <ListItemText primary={doc} />
-                                                            </ListItem>
-                                                        ))}
-                                                    </List>
+                                                <Box display="flex" flexWrap="wrap" gap={1}>
+                                                    {discrepancy.documents.map((doc, i) => (
+                                                        <Chip
+                                                            key={i}
+                                                            label={doc}
+                                                            variant="outlined"
+                                                            size="small"
+                                                        />
+                                                    ))}
                                                 </Box>
                                             </Box>
                                         </AccordionDetails>
                                     </Accordion>
                                 ))}
+                            </CardContent>
+                        </Card>
+                    </Box>
+                )}
+
+                {activeStep === 4 && discrepancies && discrepancies.length === 0 && (
+                    <Box mt={4}>
+                        <Card elevation={3}>
+                            <CardContent>
+                                <Typography variant="h5" gutterBottom>
+                                    Document Discrepancies
+                                </Typography>
+                                <Divider sx={{ mb: 2 }} />
+                                <Typography variant="body1">No discrepancies found.</Typography>
                             </CardContent>
                         </Card>
                     </Box>
