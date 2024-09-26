@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+langchain
+tavily-python
+langgraph
+matplotlib
+langchain_community
+langchain-openai
+scikit-learn
+langchainhub
+langchain-ollama
+nomic[local]
