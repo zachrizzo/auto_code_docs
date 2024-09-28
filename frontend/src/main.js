@@ -7,10 +7,75 @@ import Store from 'electron-store';
 import dotenv from 'dotenv';
 import { analyzeDirectory, initializeParser, insertCode } from '../src/utils/detector/detector.js';
 import { transformToReactFlowData } from '../src/utils/transformToReactFlowData.js';
+import { spawn } from 'child_process'; // Import spawn
+
 
 // Load environment variables from .env file (optional)
 dotenv.config();
-let allowedBaseDir = ''; // Initialize allowedBaseDir
+const OLLAMA_PORT = 11434; // Ensure this matches Ollama's port
+const SERVER_PORT = 8002
+
+
+
+const SERVER_SCRIPT_PATH = path.join(__dirname, 'server');  // Adjust path if necessary
+let pythonProcess = null;
+
+const startPythonServer = () => {
+  console.log('Starting Python server...');
+  pythonProcess = spawn(SERVER_SCRIPT_PATH, [], {
+    cwd: path.dirname(SERVER_SCRIPT_PATH),
+    env: {
+      ...process.env,
+    },
+    shell: false,
+  });
+
+  pythonProcess.stdout.on('data', (data) => {
+    console.log(`Python stdout: ${data}`);
+  });
+
+  pythonProcess.stderr.on('data', (data) => {
+    console.error(`Python stderr: ${data}`);
+  });
+
+  pythonProcess.on('close', (code) => {
+    console.log(`Python server exited with code ${code}`);
+  });
+
+  pythonProcess.on('error', (err) => {
+    console.error('Failed to start Python server:', err);
+  });
+};
+
+
+
+// Function to gracefully shut down the Python server
+const gracefulShutdown = () => {
+  if (pythonProcess) {
+    console.log('Terminating Python server...');
+    // Send SIGTERM signal to terminate the Python process
+    pythonProcess.kill('SIGTERM');
+  }
+};
+
+// Optional: Wait for the server to be ready
+const waitForServer = async (url, timeout = 50000) => {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) {
+        console.log('Python server is up and running.');
+        return true;
+      }
+    } catch (error) {
+      // Server not ready yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error('Python server did not start within the expected time.');
+};
+
 
 // Conditionally load `electron-reload` only during development
 if (process.env.NODE_ENV === 'development') {
@@ -24,14 +89,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Replace require('electron-squirrel-startup') with dynamic import
 let squirrelStartup = false;
-if (process.platform === 'win32') {
-  import('electron-squirrel-startup').then((module) => {
-    squirrelStartup = module.default;
-    if (squirrelStartup) {
-      app.quit();
-    }
-  });
-}
+let allowedBaseDir = ''; // Initialize allowedBaseDir
 
 
 // Define JSON schema for validation
@@ -132,7 +190,19 @@ const createWindow = () => {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Start the Python FastAPI server
+  startPythonServer();
+
+  // Optionally, wait for the server to be ready
+  try {
+    await waitForServer(`http://127.0.0.1:${OLLAMA_PORT}/`);
+  } catch (error) {
+    console.error(error);
+    app.quit();
+    return;
+  }
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
@@ -292,6 +362,9 @@ app.whenReady().then(() => {
     }
   });
 });
+
+// Gracefully shut down the Python server when Electron app quits
+app.on('before-quit', gracefulShutdown);
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
