@@ -59,3 +59,13 @@ export async function getEmbeddings(text) {
         return [];
     }
 }
+
+
+export async function downLoadMissingModels() {
+    const response = await fetch('http://127.0.0.1:8000/get-embeddings', {
+        method: 'post',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ download: true }),
+    });
+}
+

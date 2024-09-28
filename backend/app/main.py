@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List
@@ -14,6 +14,8 @@ from firebase_admin import credentials, firestore
 from firebase_admin.exceptions import FirebaseError
 import json
 import hashlib
+from fastapi.responses import StreamingResponse
+import subprocess
 
 load_dotenv()
 
@@ -21,7 +23,8 @@ load_dotenv()
 app = FastAPI()
 
 # Model for Ollama
-ollama_model = 'llama3:8b-instruct-q6_K'
+ollama_models = ['llama3:8b']
+OLLAMA_BINARY_PATH = "./ollama/ollama"
 
 # Add CORS middleware to allow cross-origin requests
 app.add_middleware(
@@ -55,8 +58,14 @@ class GenerateTestsRequest(BaseModel):
 class GenerateTestsResponse(BaseModel):
     test_code: str
 
+class ModelInstallRequest(BaseModel):
+    models: List[str]
+
+class ModelInstallResponse(BaseModel):
+    results: List[dict]
+
 # Define the Ollama LLM for documentation and unit test generation
-llm = ChatOllama(model=ollama_model, temperature=0)
+llm = ChatOllama(model=ollama_models[0], temperature=0)
 doc_prompt = PromptTemplate(
     template="""You are an AI assistant tasked with generating documentation in 5 sentences for the following functions or classes.
     {function_code}
@@ -76,7 +85,34 @@ test_prompt = PromptTemplate(
 doc_chain = doc_prompt | llm | StrOutputParser()
 test_chain = test_prompt | llm | StrOutputParser()
 
-ollama_emb = OllamaEmbeddings(model=ollama_model)
+ollama_emb = OllamaEmbeddings(model=ollama_models[0])
+
+async def install_models_stream(request: ModelInstallRequest):
+    results = []
+    for model_name in ollama_models:
+        try:
+            # Check if the model exists
+            result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True)
+            if model_name not in result.stdout:
+                yield f"data: Installing model {model_name}...\n\n"
+                # Pull the model
+                subprocess.run([OLLAMA_BINARY_PATH, "pull", model_name], check=True)
+                yield f"data: Model {model_name} installed successfully.\n\n"
+                results.append({"model": model_name, "status": "installed", "message": "Model installed successfully."})
+            else:
+                yield f"data: Model {model_name} already exists.\n\n"
+                results.append({"model": model_name, "status": "existing", "message": "Model already installed."})
+        except subprocess.CalledProcessError as e:
+            error_message = f"An error occurred while installing {model_name}: {str(e)}"
+            yield f"data: {error_message}\n\n"
+            results.append({"model": model_name, "status": "error", "message": error_message})
+
+    # Optionally, send a completion message
+    yield "data: Installation process completed.\n\n"
+
+@app.post("/install-models", response_class=StreamingResponse)
+async def install_models(request: Request, install_request: ModelInstallRequest):
+    return StreamingResponse(install_models_stream(install_request), media_type="text/event-stream")
 
 # Define the endpoint to generate documentation
 @app.post("/generate-docs", response_model=GenerateDocsResponse)
@@ -92,6 +128,7 @@ async def generate_docs(request: GenerateDocsRequest):
             raise ValueError("Invalid response format")
         return GenerateDocsResponse(documentation=documentation)
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Define the endpoint to generate unit tests
