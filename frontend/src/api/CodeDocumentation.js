@@ -1,5 +1,7 @@
+const PORT = 8001;
+
 export async function getAIDescription(nodeId, code) {
-    const response = await fetch('http://127.0.0.1:8000/generate-docs', {
+    const response = await fetch(`http://127.0.0.1:${PORT}/generate-docs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ function_code: code }),
@@ -14,7 +16,7 @@ export async function getAIDescription(nodeId, code) {
 }
 
 export async function getAST(code) {
-    const response = await fetch('http://127.0.0.1:8000/get-ast', {
+    const response = await fetch(`http://127.0.0.1:${PORT}/get-ast`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code }),
@@ -26,11 +28,10 @@ export async function getAST(code) {
     }
 
     return null;
-
 }
 
 export async function generateUnitTest(code) {
-    const response = await fetch('http://127.0.0.1:8000/generate-unit-test', {
+    const response = await fetch(`http://127.0.0.1:${PORT}/generate-unit-test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code }),
@@ -42,11 +43,10 @@ export async function generateUnitTest(code) {
     }
 
     return null;
-
 }
 
 export async function getEmbeddings(text) {
-    const response = await fetch('http://127.0.0.1:8000/get-embeddings', {
+    const response = await fetch(`http://127.0.0.1:${PORT}/get-embeddings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text }),
@@ -60,12 +60,53 @@ export async function getEmbeddings(text) {
     }
 }
 
-
-export async function downLoadMissingModels() {
-    const response = await fetch('http://127.0.0.1:8000/get-embeddings', {
-        method: 'post',
+export async function downLoadMissingAiModels(models) {
+    const response = await fetch(`http://127.0.0.1:${PORT}/install-models`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ download: true }),
+        body: JSON.stringify({ models }),
     });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to download models: ${errorText}`);
+    }
+
+    // Handle the streaming response if needed
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let done = false;
+    while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+            const chunk = decoder.decode(value);
+            console.log(chunk); // Process the chunk (e.g., display progress)
+        }
+    }
+
+    return true;
 }
 
+
+
+export async function compareFirestoreDocs(collectionName, selectedServiceAccount) {
+    const response = await fetch(`http://127.0.0.1:${PORT}/compare-documents`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            collection_name: collectionName,
+            service_account: selectedServiceAccount,
+            schema: null, // We will handle schema in frontend
+        }),
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch discrepancies');
+    }
+
+    const data = await response.json();
+
+    return data;
+}
