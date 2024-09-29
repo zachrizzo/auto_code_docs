@@ -12,6 +12,7 @@ import {
     Compare as CompareIcon, Delete as DeleteIcon, Save as SaveIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import { compareFirestoreDocs } from '../api/CodeDocumentation';
 
 // Styled component for hidden file input
 const VisuallyHiddenInput = styled('input')({
@@ -203,23 +204,8 @@ export default function DatabaseManagementPage() {
         }
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/compare-documents', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    collection_name: collectionName,
-                    service_account: selectedServiceAccount.content,
-                    schema: null, // We will handle schema in frontend
-                }),
-            });
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch discrepancies');
-            }
-
-            const data = await response.json();
+            const data = await compareFirestoreDocs(collectionName, selectedServiceAccount.content);
 
             if (data && data.discrepancies) {
                 let schemaFields = [];

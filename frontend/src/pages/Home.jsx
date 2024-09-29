@@ -6,6 +6,7 @@ import CodeIcon from '@mui/icons-material/Code';
 import StorageIcon from '@mui/icons-material/Storage';
 import { styled } from '@mui/system';
 import InstallModal from '../components/layout/modals/updates/InstallModal.jsx';
+import { downLoadMissingAiModels } from '../api/CodeDocumentation.js';
 
 const IconWrapper = styled(Box)(({ theme }) => ({
     display: 'flex',
@@ -34,35 +35,7 @@ function Home() {
         setIsCompleted(false);
 
         try {
-            const response = await fetch('/install-models', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ /* include any required fields here */ }),
-            });
-
-            if (!response.body) {
-                throw new Error('ReadableStream not supported in this browser.');
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            let done = false;
-
-            while (!done) {
-                const { value, done: doneReading } = await reader.read();
-                done = doneReading;
-                const chunkValue = decoder.decode(value, { stream: true });
-                const lines = chunkValue.split('\n\n').filter(line => line.startsWith('data: '));
-                lines.forEach(line => {
-                    const message = line.replace('data: ', '').trim();
-                    setMessages(prev => [...prev, message]);
-                    if (message.includes('completed')) {
-                        setIsCompleted(true);
-                    }
-                });
-            }
+            await downLoadMissingAiModels(['llama3:8b']);
         } catch (error) {
             setMessages(prev => [...prev, `Error: ${error.message}`]);
             setIsCompleted(true);

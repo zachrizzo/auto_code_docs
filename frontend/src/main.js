@@ -48,12 +48,10 @@ const startPythonServer = () => {
 };
 
 
-
 // Function to gracefully shut down the Python server
 const gracefulShutdown = () => {
   if (pythonProcess) {
     console.log('Terminating Python server...');
-    // Send SIGTERM signal to terminate the Python process
     pythonProcess.kill('SIGTERM');
   }
 };
@@ -65,7 +63,7 @@ const waitForServer = async (url, timeout = 50000) => {
     try {
       const response = await fetch(url);
       if (response.ok) {
-        console.log('Python server is up and running.');
+        console.log('Python FastAPI server is up and running.');
         return true;
       }
     } catch (error) {
@@ -73,7 +71,7 @@ const waitForServer = async (url, timeout = 50000) => {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error('Python server did not start within the expected time.');
+  throw new Error('Python FastAPI server did not start within the expected time.');
 };
 
 
@@ -167,6 +165,7 @@ const createWindow = () => {
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
           "style-src 'self' 'unsafe-inline'; " +
           "connect-src 'self' http://127.0.0.1:8000 " +
+          "connect-src 'self' http://127.0.0.1:8001 " +
           'https://*.firebaseio.com ' +
           'https://*.googleapis.com ' +
           'https://*.gstatic.com ' +

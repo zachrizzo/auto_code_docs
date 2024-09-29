@@ -1,3 +1,4 @@
+# server.py
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -8,7 +9,8 @@ from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 from langchain_community.embeddings import OllamaEmbeddings
-from app.database.firebase import fetch_and_list_doc_types
+# Assuming fetch_and_list_doc_types is correctly imported or defined
+# from app.database.firebase import fetch_and_list_doc_types
 import firebase_admin
 from firebase_admin import credentials, firestore
 from firebase_admin.exceptions import FirebaseError
@@ -16,15 +18,93 @@ import json
 import hashlib
 from fastapi.responses import StreamingResponse
 import subprocess
+import os
+import socket
+import time
+import logging
+import psutil
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
-# Initialize the FastAPI app
-app = FastAPI()
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Model for Ollama
 ollama_models = ['llama3:8b']
-OLLAMA_BINARY_PATH = "./ollama/ollama"
+OLLAMA_BINARY_PATH = "./ollama/ollama"  # Ensure this is the correct path to the Ollama binary
+OLLAMA_PORT = 11434  # Default Ollama port
+SERVER_PORT = 8001    # FastAPI server port
+
+def is_port_in_use(port):
+    """Check if a port is in use."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return False
+        except socket.error:
+            return True
+
+def is_ollama_running():
+    """Check if the Ollama process is running."""
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        if proc.info['name'] and 'ollama' in proc.info['name']:
+            return True
+        if proc.info['cmdline'] and any('ollama' in cmd for cmd in proc.info['cmdline']):
+            return True
+    return False
+
+def start_ollama():
+    """Start the Ollama server as a subprocess."""
+    global ollama_process
+    if not is_ollama_running():
+        try:
+            ollama_process = subprocess.Popen([OLLAMA_BINARY_PATH, "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            logging.info(f"Ollama started with PID {ollama_process.pid}")
+            # Wait for Ollama to be ready
+            timeout = 30  # seconds
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if is_port_in_use(OLLAMA_PORT):
+                    logging.info("Ollama is up and running.")
+                    return
+                time.sleep(1)
+            raise Exception("Ollama did not start within the expected time.")
+        except Exception as e:
+            logging.error(f"Failed to start Ollama: {e}")
+            raise
+    else:
+        logging.info("Ollama is already running.")
+
+def terminate_ollama():
+    """Terminate the Ollama subprocess."""
+    global ollama_process
+    if ollama_process and ollama_process.poll() is None:
+        try:
+            ollama_process.terminate()
+            ollama_process.wait(timeout=10)
+            logging.info("Ollama terminated gracefully.")
+        except subprocess.TimeoutExpired:
+            logging.warning("Ollama did not terminate in time. Killing it.")
+            ollama_process.kill()
+            ollama_process.wait()
+            logging.info("Ollama killed.")
+        except Exception as e:
+            logging.error(f"Error terminating Ollama: {e}")
+    else:
+        logging.info("No Ollama process to terminate.")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup code
+    start_ollama()
+    yield
+    # Shutdown code
+    terminate_ollama()
+
+# Initialize the FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware to allow cross-origin requests
 app.add_middleware(
@@ -88,26 +168,27 @@ test_chain = test_prompt | llm | StrOutputParser()
 ollama_emb = OllamaEmbeddings(model=ollama_models[0])
 
 async def install_models_stream(request: ModelInstallRequest):
-    results = []
-    for model_name in ollama_models:
+    for model_name in request.models:
         try:
             # Check if the model exists
             result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True)
             if model_name not in result.stdout:
                 yield f"data: Installing model {model_name}...\n\n"
                 # Pull the model
-                subprocess.run([OLLAMA_BINARY_PATH, "pull", model_name], check=True)
-                yield f"data: Model {model_name} installed successfully.\n\n"
-                results.append({"model": model_name, "status": "installed", "message": "Model installed successfully."})
+                process = subprocess.Popen([OLLAMA_BINARY_PATH, "pull", model_name], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                # Stream the output
+                for line in process.stdout:
+                    yield f"data: {line}\n\n"
+                process.wait()
+                if process.returncode == 0:
+                    yield f"data: Model {model_name} installed successfully.\n\n"
+                else:
+                    yield f"data: Failed to install model {model_name}.\n\n"
             else:
                 yield f"data: Model {model_name} already exists.\n\n"
-                results.append({"model": model_name, "status": "existing", "message": "Model already installed."})
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             error_message = f"An error occurred while installing {model_name}: {str(e)}"
             yield f"data: {error_message}\n\n"
-            results.append({"model": model_name, "status": "error", "message": error_message})
-
-    # Optionally, send a completion message
     yield "data: Installation process completed.\n\n"
 
 @app.post("/install-models", response_class=StreamingResponse)
@@ -162,11 +243,15 @@ async def compare_documents(request: CollectionRequest):
     collection_name = request.collection_name
     service_account = request.service_account
 
+    print(f"Comparing documents in collection: {collection_name}")
+
     try:
         service_account_hash = hashlib.sha256(json.dumps(service_account, sort_keys=True).encode()).hexdigest()
         if service_account_hash not in firebase_admin._apps:
             cred = credentials.Certificate(service_account)
             firebase_admin.initialize_app(cred, name=service_account_hash)
+
+        print('Initialized Firebase Admin SDK')
 
         db = firestore.client(firebase_admin.get_app(service_account_hash))
         discrepancies = fetch_and_list_doc_types(db, collection_name)
