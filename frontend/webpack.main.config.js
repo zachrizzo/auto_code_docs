@@ -46,9 +46,6 @@ module.exports = {
   },
 
   resolve: {
-    alias: {
-      '@codemirror/state': require.resolve('@codemirror/state'),
-    },
     fallback: {
       fs: false,
       path: require.resolve("path-browserify")

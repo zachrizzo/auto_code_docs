@@ -13,15 +13,12 @@ import {
     Tooltip,
     CircularProgress,
     Divider,
-    AppBar,
     Toolbar,
     Tab,
     Tabs,
     Drawer,
     List,
     ListItem,
-    ListItemIcon,
-    ListItemText,
     Switch as MuiSwitch,
     FormControlLabel,
 } from '@mui/material';
@@ -53,8 +50,6 @@ import { ErrorBoundary } from 'react-error-boundary';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { indentOnInput } from '@codemirror/language';
-// Removed basicSetup import as it's causing multiple instances
 
 import ReactMarkdown from 'react-markdown';
 
@@ -83,7 +78,6 @@ const Analyzer = () => {
     const [activeTab, setActiveTab] = useState(0);
     const [includeAnonymousFunctions, setIncludeAnonymousFunctions] = useState(true);
     const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false); // New state for Settings Panel
-    const editorRef = useRef(null);
     const theme = useTheme();
     const containerRef = useRef(null);
     const [drawerHeight, setDrawerHeight] = useState(0);
@@ -148,7 +142,7 @@ const Analyzer = () => {
         setIsCodeExpanded(false);
     };
 
-    console.log('Selected Node:', selectedNode);
+    console.log('Selected Node:', editedCode);
 
     /**
      * Handles saving the edited code back to the file.
@@ -603,7 +597,7 @@ const Analyzer = () => {
                                     borderColor: 'divider',
                                 }}
                             >
-                                <Typography variant="h6">{selectedNode?.label}</Typography>
+                                <Typography variant="h6">  {selectedNode?.label.substring(0, 10)}</Typography>
                                 <IconButton onClick={() => setIsDrawerOpen(false)}>
                                     <CloseIcon />
                                 </IconButton>
@@ -641,20 +635,21 @@ const Analyzer = () => {
                                                 {isCodeExpanded ? 'Show Snippet' : 'Expand Code'}
                                             </Button>
                                         </Box>
-                                        <Typography variant="caption" display="block" gutterBottom>
-                                            {`Editing ${isCodeExpanded ? 'full file' : 'function or class'} "${selectedNode?.label}".`}
-                                        </Typography>
+                                        {/* <Typography variant="caption" display="block" gutterBottom>
+                                            {`Editing ${isCodeExpanded ? 'full file' : 'function or class'} "${selectedNode?.label.t}".`}
+                                        </Typography> */}
                                         <Box sx={{ height: 300, mb: 2 }}>
                                             {editedCode && (
                                                 <ErrorBoundary fallback={<div>Error loading code editor</div>}>
                                                     <CodeMirror
+
                                                         value={editedCode}
                                                         height="100%"
-                                                        extensions={[javascript(), oneDark, indentOnInput()]}
-                                                        onCreateEditor={(editor) => {
-                                                            editorRef.current = editor;
+                                                        extensions={[javascript(), oneDark]}
+                                                        onChange={(value, viewUpdate) => {
+                                                            setEditedCode(value);
                                                         }}
-                                                        onChange={(value) => setEditedCode(value)}
+                                                        theme={oneDark}
                                                     />
                                                 </ErrorBoundary>
                                             )}
