@@ -49,11 +49,12 @@ import 'react-resizable/css/styles.css';
 
 import { ErrorBoundary } from 'react-error-boundary';
 
-// CodeMirror imports
-import CodeMirror, { lineNumbers, EditorView } from '@uiw/react-codemirror';
+// Updated CodeMirror imports
+import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { indentOnInput } from '@codemirror/language';
+// Removed basicSetup import as it's causing multiple instances
 
 import ReactMarkdown from 'react-markdown';
 
@@ -649,8 +650,7 @@ const Analyzer = () => {
                                                     <CodeMirror
                                                         value={editedCode}
                                                         height="100%"
-                                                        extensions={[javascript(), indentOnInput()]}
-                                                        theme={oneDark}
+                                                        extensions={[javascript(), oneDark, indentOnInput()]}
                                                         onCreateEditor={(editor) => {
                                                             editorRef.current = editor;
                                                         }}
