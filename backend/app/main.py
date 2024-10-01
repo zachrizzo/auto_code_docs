@@ -48,16 +48,9 @@ def get_base_dir():
 # Define base directory
 BASE_DIR = get_base_dir()
 
-# Define paths
-# OLLAMA_BINARY_NAME = 'ollama' if sys.platform != 'win32' else 'ollama.exe'
-# OLLAMA_BINARY_PATH = os.path.join(BASE_DIR, 'ollama', OLLAMA_BINARY_NAME)
-# OLLAMA_DATA_DIR = os.path.join(BASE_DIR, 'ollama')
-# OLLAMA_MODELS_DIR = os.path.join(OLLAMA_DATA_DIR, 'models')
-
 OLLAMA_BINARY_PATH = "./ollama/ollama"
 OLLAMA_DATA_DIR = "./ollama"
 OLLAMA_MODELS_DIR = "./ollama/models"
-
 
 # Ensure the models directory exists
 os.makedirs(OLLAMA_MODELS_DIR, exist_ok=True)
@@ -198,6 +191,12 @@ class ModelInstallRequest(BaseModel):
 class ModelInstallResponse(BaseModel):
     results: List[dict]
 
+class ModelCheckRequest(BaseModel):
+    models: List[str]
+
+class ModelCheckResponse(BaseModel):
+    missing_models: List[str]
+
 # Define the Ollama LLM for documentation and unit test generation
 llm = ChatOllama(model=ollama_models[0], temperature=0)
 doc_prompt = PromptTemplate(
@@ -264,6 +263,32 @@ async def install_models_stream(request: ModelInstallRequest):
             error_message = f"An error occurred while installing {model_name}: {str(e)}"
             yield f"data: {error_message}\n\n"
     yield "data: Installation process completed.\n\n"
+
+async def check_models(request: ModelCheckRequest):
+    """Check which models are missing from the system."""
+    missing_models = []
+    try:
+        env = os.environ.copy()
+        env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
+
+        # Get the list of installed models
+        result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True, env=env)
+        installed_models = [line.split()[0] for line in result.stdout.splitlines()]
+
+        # Determine missing models
+        for model in request.models:
+            if model not in installed_models:
+                missing_models.append(model)
+
+        return ModelCheckResponse(missing_models=missing_models)
+    except Exception as e:
+        logging.error(f"Error checking models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/check-models", response_model=ModelCheckResponse)
+async def check_models_endpoint(request: ModelCheckRequest):
+    """Endpoint to check which models are missing."""
+    return await check_models(request)
 
 @app.post("/install-models", response_class=StreamingResponse)
 async def install_models(request: Request, install_request: ModelInstallRequest):

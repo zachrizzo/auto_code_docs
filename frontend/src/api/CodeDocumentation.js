@@ -96,6 +96,29 @@ export async function downLoadMissingAiModels(models, onProgress) {
     return true;
 }
 
+export async function checkMissingAiModels(models) {
+    const PORT = 8001; // Ensure PORT is defined or replace with actual port number
+
+    try {
+        const response = await fetch(`http://127.0.0.1:${PORT}/check-models`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ models }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to check models: ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data; // Expected response: { missing_models: [...] }
+    } catch (error) {
+        throw new Error(`Error during model check: ${error.message}`);
+    }
+}
+
+
 
 
 

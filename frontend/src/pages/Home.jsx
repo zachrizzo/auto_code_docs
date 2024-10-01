@@ -1,12 +1,14 @@
 // src/pages/Home.js
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Grid, Card, CardContent, Typography, Box } from '@mui/material';
+import { Button, Grid, Card, CardContent, Typography, Box, Snackbar, Alert } from '@mui/material';
 import CodeIcon from '@mui/icons-material/Code';
 import StorageIcon from '@mui/icons-material/Storage';
 import { styled } from '@mui/system';
 import InstallModal from '../components/layout/modals/updates/InstallModal.jsx';
-import { downLoadMissingAiModels } from '../api/CodeDocumentation.js';
+import ConfirmationModal from '../components/layout/modals/updates/ConfirmationModal.jsx';
+import { downLoadMissingAiModels, checkMissingAiModels } from '../api/CodeDocumentation.js';
 
 const IconWrapper = styled(Box)(({ theme }) => ({
     display: 'flex',
@@ -18,8 +20,11 @@ const IconWrapper = styled(Box)(({ theme }) => ({
 function Home() {
     const navigate = useNavigate();
     const [modalOpen, setModalOpen] = useState(false);
+    const [confirmationOpen, setConfirmationOpen] = useState(false);
     const [messages, setMessages] = useState([]);
     const [isCompleted, setIsCompleted] = useState(false);
+    const [warningOpen, setWarningOpen] = useState(false);
+    const [requiredModels] = useState(['llama3:8b']); // Define required models
 
     const routeToAnalyzer = () => {
         navigate('/analyze');
@@ -29,32 +34,51 @@ function Home() {
         navigate('/database');
     };
 
+    const handleInstallProgress = (message) => {
+        setMessages((prevMessages) => [...prevMessages, message]);
+        if (message.includes('Installation process completed.')) {
+            setIsCompleted(true);
+        }
+    };
 
-
-    const downLoadMissingModels = async () => {
+    const initiateModelInstallation = async (missingModels) => {
         setModalOpen(true);
         setMessages([]);
         setIsCompleted(false);
 
-        const handleProgress = (message) => {
-            setMessages((prevMessages) => [...prevMessages, message]);
-            if (message.includes('Installation process completed.')) {
-                setIsCompleted(true);
-            }
-        };
-
         try {
-            await downLoadMissingAiModels(['llama3:8b'], handleProgress);
+            await downLoadMissingAiModels(missingModels, handleInstallProgress);
         } catch (error) {
             setMessages((prev) => [...prev, `Error: ${error.message}`]);
             setIsCompleted(true);
         }
     };
 
+    const checkAndInstallModels = async () => {
+        try {
+            const response = await checkMissingAiModels(requiredModels);
+            const { missing_models } = response;
+            if (missing_models.length > 0) {
+                setConfirmationOpen(true);
+            }
+        } catch (error) {
+            console.error("Error checking missing AI models:", error);
+        }
+    };
+
+    const handleConfirmation = () => {
+        setConfirmationOpen(false);
+        initiateModelInstallation(requiredModels);
+    };
+
+    const handleCancelInstallation = () => {
+        setConfirmationOpen(false);
+        setWarningOpen(true);
+    };
 
     useEffect(() => {
-        // Install missing AI models on component mount
-        downLoadMissingModels();
+        // First, check for missing AI models
+        checkAndInstallModels();
     }, []);
 
     return (
@@ -65,6 +89,21 @@ function Home() {
                 messages={messages}
                 isCompleted={isCompleted}
             />
+            <ConfirmationModal
+                open={confirmationOpen}
+                onConfirm={handleConfirmation}
+                onCancel={handleCancelInstallation}
+            />
+            <Snackbar
+                open={warningOpen}
+                autoHideDuration={6000}
+                onClose={() => setWarningOpen(false)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={() => setWarningOpen(false)} severity="warning">
+                    Some features may not work properly without the required AI models.
+                </Alert>
+            </Snackbar>
             <Box sx={{ py: 8 }}>
                 <Typography variant="h3" align="center" gutterBottom>
                     Welcome to Fractal X (Beta)
