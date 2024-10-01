@@ -78,6 +78,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@codemirror/basic-setup": "^0.20.0",
     "@codemirror/gutter": "^0.19.9",
     "@codemirror/lang-javascript": "^6.2.2",
     "@codemirror/language": "^6.10.3",

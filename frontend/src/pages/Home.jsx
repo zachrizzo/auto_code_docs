@@ -52,10 +52,10 @@ function Home() {
     };
 
 
-    // useEffect(() => {
-    //     // Install missing AI models on component mount
-    //     downLoadMissingModels();
-    // }, []);
+    useEffect(() => {
+        // Install missing AI models on component mount
+        downLoadMissingModels();
+    }, []);
 
     return (
         <>
