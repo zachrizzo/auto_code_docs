@@ -29,23 +29,33 @@ function Home() {
         navigate('/database');
     };
 
+
+
     const downLoadMissingModels = async () => {
         setModalOpen(true);
         setMessages([]);
         setIsCompleted(false);
 
+        const handleProgress = (message) => {
+            setMessages((prevMessages) => [...prevMessages, message]);
+            if (message.includes('Installation process completed.')) {
+                setIsCompleted(true);
+            }
+        };
+
         try {
-            await downLoadMissingAiModels(['llama3:8b']);
+            await downLoadMissingAiModels(['llama3:8b'], handleProgress);
         } catch (error) {
-            setMessages(prev => [...prev, `Error: ${error.message}`]);
+            setMessages((prev) => [...prev, `Error: ${error.message}`]);
             setIsCompleted(true);
         }
     };
 
-    useEffect(() => {
-        // Install missing AI models on component mount
-        downLoadMissingModels();
-    }, []);
+
+    // useEffect(() => {
+    //     // Install missing AI models on component mount
+    //     downLoadMissingModels();
+    // }, []);
 
     return (
         <>

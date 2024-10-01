@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('configs-changed', (event, configs) => callback(configs)),
     removeConfigsChangedListener: (callback) =>
         ipcRenderer.removeListener('configs-changed', callback),
-    deleteServiceAccount: (projectId) => ipcRenderer.invoke('delete-config', projectId),
+    deleteServiceAccount: (projectId) => ipcRenderer.invoke('delete-service-account', projectId),
 
     getServiceAccounts: () => ipcRenderer.invoke('get-configs'),
     saveServiceAccounts: (configs) => ipcRenderer.invoke('save-configs', configs),

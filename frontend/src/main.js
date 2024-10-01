@@ -13,15 +13,15 @@ import { spawn } from 'child_process'; // Import spawn
 // Load environment variables from .env file (optional)
 dotenv.config();
 const OLLAMA_PORT = 11434; // Ensure this matches Ollama's port
-const SERVER_PORT = 8002
+const SERVER_PORT = 8001
 
 
 
-const SERVER_SCRIPT_PATH = path.join(__dirname, 'server');  // Adjust path if necessary
+const SERVER_SCRIPT_PATH = path.join(__dirname, 'backend/server/server');  // Adjust path if necessary
 let pythonProcess = null;
 
 const startPythonServer = () => {
-  console.log('Starting Python server...');
+  console.log('Starting Python server at ...', SERVER_SCRIPT_PATH);
   pythonProcess = spawn(SERVER_SCRIPT_PATH, [], {
     cwd: path.dirname(SERVER_SCRIPT_PATH),
     env: {

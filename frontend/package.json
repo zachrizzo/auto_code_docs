@@ -16,7 +16,7 @@
     "rebuild": "electron-rebuild -f -w tree-sitter",
     "lint": "echo \"No linting configured\"",
     "backend": "cd ../backend && python3 server.py",
-    "clean": "rm -rf node_modules && rm -rf package-lock.json ",
+    "clean": "rm -rf node_modules && rm -rf package-lock.json && rm -rf .webpack",
     "bundle:backend": "cd ../backend && pyinstaller --onefile server.py && chmod +x dist/server"
   },
   "tree-sitter": [
