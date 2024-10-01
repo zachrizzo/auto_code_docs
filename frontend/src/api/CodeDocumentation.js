@@ -60,7 +60,8 @@ export async function getEmbeddings(text) {
     }
 }
 
-export async function downLoadMissingAiModels(models) {
+
+export async function downLoadMissingAiModels(models, onProgress) {
     const response = await fetch(`http://127.0.0.1:${PORT}/install-models`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -72,7 +73,7 @@ export async function downLoadMissingAiModels(models) {
         throw new Error(`Failed to download models: ${errorText}`);
     }
 
-    // Handle the streaming response if needed
+    // Handle the streaming response
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let done = false;
@@ -81,12 +82,20 @@ export async function downLoadMissingAiModels(models) {
         done = readerDone;
         if (value) {
             const chunk = decoder.decode(value);
-            console.log(chunk); // Process the chunk (e.g., display progress)
+            // Process the chunk (e.g., display progress)
+            const lines = chunk.split('\n\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const message = line.substring(6).trim();
+                    onProgress(message);
+                }
+            }
         }
     }
 
     return true;
 }
+
 
 
 

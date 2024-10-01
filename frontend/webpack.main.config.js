@@ -15,38 +15,40 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         {
-          from: path.resolve(__dirname, '../frontend/.wasm'),  // Source folder with .wasm files
-          to: path.resolve(__dirname, '../frontend/.webpack/main')  // Destination folder in .webpack/main
+          from: path.resolve(__dirname, '../frontend/.wasm'),
+          to: path.resolve(__dirname, '../frontend/.webpack/main')
         },
         {
-          from: path.resolve(__dirname, '../backend/dist/server'),  // Source folder with the server executable
-          to: path.resolve(__dirname, '../frontend/.webpack/main')  // Destination folder in .webpack/main
+          from: path.resolve(__dirname, '../backend/dist/server'),
+          to: path.resolve(__dirname, '../frontend/.webpack/main/backend/server')
         },
         {
-          from: path.resolve(__dirname, '../backend/ollama'),  // Source folder with assets
-          to: path.resolve(__dirname, '../frontend/.webpack/main/ollama')  // Destination folder in .webpack/main
+          from: path.resolve(__dirname, '../backend/app/ollama'),
+          to: path.resolve(__dirname, '../frontend/.webpack/main/backend/server/ollama')
         }
       ]
     }),
     new WebpackShellPluginNext({
       onBuildEnd: {
-        scripts: ['chmod +x ../frontend/.webpack/main/server', 'chmod +x ../frontend/.webpack/main/ollama/ollama'],  // Set execute permission
+        scripts: [
+          'chmod +x ../frontend/.webpack/main/backend/server/ollama/ollama',
+          'chmod +x ../frontend/.webpack/main/backend/server/server',
+        ],
         blocking: false,
         parallel: true
       }
-
     })
   ],
 
   externals: {
-    'tree-sitter': 'commonjs tree-sitter', // Ensure that Tree-sitter is properly resolved
+    'tree-sitter': 'commonjs tree-sitter',
     'electron-reload': 'commonjs electron-reload'
   },
 
   resolve: {
     fallback: {
-      fs: false,  // Disable fs, since it’s not needed for the browser
-      path: require.resolve("path-browserify")  // Resolve path using path-browserify
+      fs: false,
+      path: require.resolve("path-browserify")
     }
   },
 };
