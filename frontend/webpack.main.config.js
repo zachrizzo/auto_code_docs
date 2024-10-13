@@ -2,18 +2,38 @@ const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const path = require('path');
 const WebpackShellPluginNext = require('webpack-shell-plugin-next');
+const webpack = require('webpack');
+const dotenv = require('dotenv');
+
+// Load environment variables from .env file
+const env = dotenv.config().parsed;
+
+
+// Convert environment variables to a format suitable for DefinePlugin
+const envKeys = Object.keys(env).reduce((prev, next) => {
+  prev[`process.env.${next}`] = JSON.stringify(env[next]);
+  return prev;
+}, {});
+
 
 module.exports = {
   entry: './src/main.js',
+
+
 
   module: {
     rules: require('./webpack.rules'),
   },
 
   plugins: [
+    new webpack.DefinePlugin(envKeys),
     new NodePolyfillPlugin(),
     new CopyWebpackPlugin({
       patterns: [
+        {
+          from: path.resolve(__dirname, '../frontend/src/static'),
+          to: path.resolve(__dirname, '../frontend/.webpack/main/static'),
+        },
         {
           from: path.resolve(__dirname, '../frontend/.wasm'),
           to: path.resolve(__dirname, '../frontend/.webpack/main')
@@ -28,6 +48,7 @@ module.exports = {
         }
       ]
     }),
+
     new WebpackShellPluginNext({
       onBuildEnd: {
         scripts: [
