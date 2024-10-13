@@ -305,7 +305,7 @@ function App() {
         return () => {
             unsubscribe();
         };
-    }, []);
+    }, [window.electronAPI]);
 
     console.log(auth.currentUser);
 

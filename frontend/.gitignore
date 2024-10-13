@@ -92,3 +92,8 @@ typings/
 out/
 
 .env
+backend/build/
+backend/dist/
+backend/app/ollama/ollama
+*.pyz
+*.pkg

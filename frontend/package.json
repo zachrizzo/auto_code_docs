@@ -8,11 +8,16 @@
     "start": "electron-forge start",
     "package": "NODE_ENV=production electron-forge package",
     "make": "NODE_ENV=production electron-forge make",
+    "make:all": "NODE_ENV=production electron-forge make --platform=linux,darwin,win32",
+    "make:windows": "NODE_ENV=production electron-forge make --platform=win32",
+    "make:linux": "NODE_ENV=production electron-forge make --platform=linux",
+    "make:mac": "NODE_ENV=production electron-forge make --platform=darwin",
     "publish": "NODE_ENV=production electron-forge publish",
     "rebuild": "electron-rebuild -f -w tree-sitter",
     "lint": "echo \"No linting configured\"",
     "backend": "cd ../backend && python3 server.py",
-    "clean": "rm -rf node_modules && rm -rf package-lock.json "
+    "clean": "rm -rf node_modules && rm -rf package-lock.json && rm -rf .webpack",
+    "bundle:backend": "cd ../backend && pyinstaller --onefile server.py && chmod +x dist/server"
   },
   "tree-sitter": [
     {
@@ -55,6 +60,8 @@
     "css-loader": "^6.0.0",
     "electron": "^32.0.1",
     "electron-reload": "^2.0.0-alpha.1",
+    "html-webpack-plugin": "^5.6.0",
+    "ignore-loader": "^0.1.2",
     "monaco-editor-webpack-plugin": "^7.1.0",
     "node-loader": "^2.0.0",
     "node-polyfill-webpack-plugin": "^4.0.0",
@@ -63,6 +70,7 @@
     "tree-sitter-cli": "^0.23.0",
     "tree-sitter-javascript": "^0.23.0",
     "tree-sitter-python": "^0.23.2",
+    "webpack-shell-plugin-next": "^2.3.2",
     "worker-loader": "^3.0.8"
   },
   "keywords": [],
@@ -72,10 +80,10 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@codemirror/gutter": "^0.19.9",
     "@codemirror/lang-javascript": "^6.2.2",
-    "@codemirror/language": "^6.10.3",
-    "@codemirror/view": "^6.33.0",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/theme-one-dark": "^6.1.2",
+    "@codemirror/view": "^6.34.1",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
     "@monaco-editor/react": "^4.6.0",
@@ -95,7 +103,7 @@
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^10.0.0",
     "elkjs": "^0.9.3",
-    "firebase": "^10.13.1",
+    "firebase": "^10.14.0",
     "ignore": "^5.3.2",
     "linguist-js": "^2.7.1",
     "monaco-editor": "^0.52.0",

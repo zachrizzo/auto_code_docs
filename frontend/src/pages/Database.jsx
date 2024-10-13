@@ -1,3 +1,5 @@
+// DatabaseManagementPage.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
     TextField, Button, Container, Typography, Box, Card, CardContent,
@@ -12,6 +14,7 @@ import {
     Compare as CompareIcon, Delete as DeleteIcon, Save as SaveIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import { compareFirestoreDocs } from '../api/CodeDocumentation';
 
 // Styled component for hidden file input
 const VisuallyHiddenInput = styled('input')({
@@ -71,7 +74,7 @@ export default function DatabaseManagementPage() {
 
         loadServiceAccounts();
 
-        const handleServiceAccountsChanged = (event, accounts) => {
+        const handleServiceAccountsChanged = (accounts) => {
             setServiceAccounts(Array.isArray(accounts) ? accounts : []);
             if (accounts?.length === 0) {
                 setSelectedServiceAccount(null);
@@ -81,7 +84,7 @@ export default function DatabaseManagementPage() {
         window.electronAPI.onServiceAccountsChanged(handleServiceAccountsChanged);
 
         return () => {
-            // Cleanup if necessary
+            window.electronAPI.removeServiceAccountsChangedListener(handleServiceAccountsChanged);
         };
     }, []);
 
@@ -203,23 +206,7 @@ export default function DatabaseManagementPage() {
         }
 
         try {
-            const response = await fetch('http://127.0.0.1:8000/compare-documents', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    collection_name: collectionName,
-                    service_account: selectedServiceAccount.content,
-                    schema: null, // We will handle schema in frontend
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch discrepancies');
-            }
-
-            const data = await response.json();
+            const data = await compareFirestoreDocs(collectionName, selectedServiceAccount.content);
 
             if (data && data.discrepancies) {
                 let schemaFields = [];
@@ -329,10 +316,14 @@ export default function DatabaseManagementPage() {
         }
     };
 
+    // React Component
+
     const handleDeleteServiceAccount = async () => {
         if (selectedServiceAccount) {
             try {
-                await window.electronAPI.deleteServiceAccount(selectedServiceAccount.content.project_id);
+                const projectId = selectedServiceAccount.content.project_id || selectedServiceAccount.content.projectId;
+                console.log(`Deleting service account with projectId: ${projectId}`);
+                await window.electronAPI.deleteServiceAccount(projectId);
                 setSnackbar({
                     open: true,
                     message: 'Service account deleted successfully',
@@ -392,12 +383,12 @@ export default function DatabaseManagementPage() {
                     {serviceAccountOption === 'select' && serviceAccounts?.length > 0 && (
                         <Box mt={2}>
                             <Select
-                                value={selectedServiceAccount || ''}
-                                onChange={(e) => setSelectedServiceAccount(e.target.value)}
+                                value={selectedServiceAccount ? selectedServiceAccount.content.project_id : ''}
+                                onChange={(e) => setSelectedServiceAccount(serviceAccounts.find(sa => sa.content.project_id === e.target.value))}
                                 fullWidth
                             >
                                 {serviceAccounts.map((account, index) => (
-                                    <MenuItem key={index} value={account}>
+                                    <MenuItem key={index} value={account.content.project_id}>
                                         {account?.name?.length > 20 ? (
                                             <Tooltip title={account.name}>
                                                 <Typography
@@ -664,7 +655,7 @@ export default function DatabaseManagementPage() {
     const getStatusColor = (status) => {
         switch (status) {
             case 'Matching':
-                return 'default'; // White
+                return 'default'; // Grey
             case 'Missing':
                 return 'error'; // Red
             case 'Extra':
@@ -734,7 +725,7 @@ export default function DatabaseManagementPage() {
                                                     Fields:
                                                 </Typography>
                                                 <Box display="flex" flexWrap="wrap" gap={1}>
-                                                    {/* Matching Fields - White Chips */}
+                                                    {/* Matching Fields - Grey Chips */}
                                                     {discrepancy.matchingFields && discrepancy.matchingFields.map((field, i) => (
                                                         <Chip
                                                             key={`matching-${i}`}

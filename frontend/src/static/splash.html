@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fractal X</title>
+    <style>
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        background-color: #121212;
+        color: #ffffff;
+      }
+      .splash-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        text-align: center;
+      }
+      .fractal-icon {
+        font-size: 6rem;
+        margin-bottom: 2rem;
+        animation: spin 10s linear infinite;
+      }
+      h1 {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        animation: glow 2s ease-in-out infinite alternate;
+      }
+      p {
+        font-size: 1.2rem;
+        opacity: 0.7;
+      }
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes glow {
+        from {
+          text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #00b3ff,
+            0 0 20px #00b3ff;
+        }
+        to {
+          text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #00b3ff,
+            0 0 40px #00b3ff;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash-container">
+      <div class="fractal-icon" aria-hidden="true">❄️</div>
+      <h1>Fractal X</h1>
+      <p>Loading ...</p>
+    </div>
+  </body>
+</html>

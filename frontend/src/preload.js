@@ -6,19 +6,20 @@ const path = require('path');
 
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    getConfigs: () => ipcRenderer.invoke('get-configs'),
-    saveConfigs: (configs) => ipcRenderer.invoke('save-configs', configs),
+    // getConfigs: () => ipcRenderer.invoke('get-configs'),
+    // saveConfigs: (configs) => ipcRenderer.invoke('save-configs', configs),
+    getServiceAccounts: () => ipcRenderer.invoke('get-service-accounts'),
+    saveServiceAccounts: (configs) => ipcRenderer.invoke('save-service-accounts', configs),
+    deleteServiceAccount: (projectId) => ipcRenderer.invoke('delete-service-account', projectId),
+
+    //Past Collections
     getPastCollections: () => ipcRenderer.invoke('get-past-collections'),
     savePastCollections: (collections) => ipcRenderer.invoke('save-past-collections', collections),
-    deleteConfig: (projectId) => ipcRenderer.invoke('delete-config', projectId),
-    onConfigsChanged: (callback) =>
-        ipcRenderer.on('configs-changed', (event, configs) => callback(configs)),
-    removeConfigsChangedListener: (callback) =>
-        ipcRenderer.removeListener('configs-changed', callback),
-    deleteServiceAccount: (projectId) => ipcRenderer.invoke('delete-config', projectId),
 
-    getServiceAccounts: () => ipcRenderer.invoke('get-configs'),
-    saveServiceAccounts: (configs) => ipcRenderer.invoke('save-configs', configs),
+    // Directory Operations
+    selectDirectory: () => ipcRenderer.invoke('select-directory'),
+    getFileContent: (filePath) => ipcRenderer.invoke('get-file-content', filePath),
+    saveFile: ({ filePath, content }) => ipcRenderer.invoke('save-file', { filePath, content }),
 
     // New function for listening to 'configs-changed' event
     onServiceAccountsChanged: (callback) => ipcRenderer.on('configs-changed', callback),
@@ -26,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Add this new method
     initializeParser: () => ipcRenderer.invoke('initialize-parser'),
 
+    // File System Operations
     readFile: (filePath) => fs.readFileSync(filePath, 'utf8'),
     listFiles: (dirPath) => fs.readdirSync(dirPath),
     getFileStats: (filePath) => fs.statSync(filePath),
@@ -41,3 +43,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
 });
+

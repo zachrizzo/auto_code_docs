@@ -26,6 +26,10 @@ module.exports = [
       }
     }
   },
+  {
+    test: /splash\.html$/,
+    loader: 'ignore-loader',
+  },
 
 
   // Put your webpack loader rules in this array.  This is where you would put
