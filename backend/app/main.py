@@ -1,5 +1,3 @@
-# app/backend/main.py
-
 import os
 import socket
 import subprocess
@@ -10,6 +8,7 @@ import re
 import json
 import hashlib
 import argparse
+import shutil
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +48,9 @@ def get_base_dir():
 
 # Define base directory
 BASE_DIR = get_base_dir()
+
+# Set the default Ollama port (Assuming 11434 is the default. Change if different)
+DEFAULT_OLLAMA_PORT = 11434
 
 OLLAMA_BINARY_PATH = "./ollama/ollama"
 OLLAMA_DATA_DIR = "./ollama"
@@ -115,23 +117,31 @@ def start_ollama():
                 raise FileNotFoundError(f"Ollama binary not found at {OLLAMA_BINARY_PATH}")
 
             ollama_process = subprocess.Popen(
-                [OLLAMA_BINARY_PATH, "serve", "--port", str(OLLAMA_PORT)],
+                [OLLAMA_BINARY_PATH, "serve"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env
             )
             logging.info(f"Ollama started with PID {ollama_process.pid}")
             # Wait for Ollama to be ready
-            timeout = 10  # seconds
+            timeout = 20  # Increased timeout to 20 seconds
             start_time = time.time()
             while time.time() - start_time < timeout:
-                if not is_port_in_use(OLLAMA_PORT):
+                if is_port_in_use(OLLAMA_PORT):  # Changed condition
                     logging.info("Ollama is up and running.")
                     return
                 time.sleep(0.5)
             raise Exception("Ollama did not start within the expected time.")
         except Exception as e:
             logging.error(f"Failed to start Ollama: {e}")
+            # Capture and log subprocess output for debugging
+            if ollama_process:
+                try:
+                    stdout, stderr = ollama_process.communicate(timeout=5)
+                    logging.error(f"Ollama stdout: {stdout.decode()}")
+                    logging.error(f"Ollama stderr: {stderr.decode()}")
+                except subprocess.TimeoutExpired:
+                    logging.error("Timeout while capturing Ollama output.")
             raise
     else:
         logging.info("Ollama is already running.")
@@ -157,11 +167,16 @@ def terminate_ollama():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
-    # Startup code
-    start_ollama()
-    yield
-    # Shutdown code
-    terminate_ollama()
+    try:
+        # Startup code
+        start_ollama()
+        yield
+    except Exception as e:
+        logging.error(f"Lifespan startup error: {e}")
+        raise
+    finally:
+        # Shutdown code
+        terminate_ollama()
 
 # Initialize the FastAPI app with lifespan
 app = FastAPI(lifespan=lifespan)
@@ -211,27 +226,32 @@ class ModelCheckResponse(BaseModel):
     missing_models: List[str]
 
 # Define the Ollama LLM for documentation and unit test generation
-llm = ChatOllama(model=ollama_models[0], temperature=0, base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
-doc_prompt = PromptTemplate(
-    template="""You are an AI assistant tasked with generating documentation in 5 sentences for the following functions or classes.
-    {function_code}
-    Documentation:
-    """,
-    input_variables=["function_code"]
-)
+ollama_available = True
+try:
+    llm = ChatOllama(model=ollama_models[0], temperature=0, base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
+    doc_prompt = PromptTemplate(
+        template="""You are an AI assistant tasked with generating documentation in 5 sentences for the following functions or classes.
+        {function_code}
+        Documentation:
+        """,
+        input_variables=["function_code"]
+    )
 
-test_prompt = PromptTemplate(
-    template="""You are an AI assistant tasked with generating unit tests for the following function or class in the same programming language.
-    {function_code}
-    Unit Test:
-    """,
-    input_variables=["function_code"]
-)
+    test_prompt = PromptTemplate(
+        template="""You are an AI assistant tasked with generating unit tests for the following function or class in the same programming language.
+        {function_code}
+        Unit Test:
+        """,
+        input_variables=["function_code"]
+    )
 
-doc_chain = doc_prompt | llm | StrOutputParser()
-test_chain = test_prompt | llm | StrOutputParser()
+    doc_chain = doc_prompt | llm | StrOutputParser()
+    test_chain = test_prompt | llm | StrOutputParser()
 
-ollama_emb = OllamaEmbeddings(model=ollama_models[0], base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
+    ollama_emb = OllamaEmbeddings(model=ollama_models[0], base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
+except Exception as e:
+    logging.error(f"Ollama is not available: {e}")
+    ollama_available = False
 
 async def install_models_stream(request: ModelInstallRequest):
     """Stream the model installation process."""
@@ -287,7 +307,7 @@ async def check_models(request: ModelCheckRequest):
         env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
 
         # Get the list of installed models
-        result = subprocess.run([OLLAMA_BINARY_PATH, "list", "--port", str(OLLAMA_PORT)], capture_output=True, text=True, env=env)
+        result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True, env=env)
         installed_models = [line.split()[0] for line in result.stdout.splitlines()]
 
         # Determine missing models
@@ -303,16 +323,22 @@ async def check_models(request: ModelCheckRequest):
 @app.post("/check-models", response_model=ModelCheckResponse)
 async def check_models_endpoint(request: ModelCheckRequest):
     """Endpoint to check which models are missing."""
+    if not ollama_available:
+        raise HTTPException(status_code=503, detail="Ollama is not available.")
     return await check_models(request)
 
 @app.post("/install-models", response_class=StreamingResponse)
 async def install_models(request: Request, install_request: ModelInstallRequest):
     """Endpoint to install Ollama models."""
+    if not ollama_available:
+        raise HTTPException(status_code=503, detail="Ollama is not available.")
     return StreamingResponse(install_models_stream(install_request), media_type="text/event-stream")
 
 @app.post("/generate-docs", response_model=GenerateDocsResponse)
 async def generate_docs(request: GenerateDocsRequest):
     """Endpoint to generate documentation for given function or class code."""
+    if not ollama_available:
+        raise HTTPException(status_code=503, detail="Ollama is not available.")
     try:
         function_code = request.function_code
         response = doc_chain.invoke({"function_code": function_code})
@@ -330,6 +356,8 @@ async def generate_docs(request: GenerateDocsRequest):
 @app.post("/generate-unit-test", response_model=GenerateTestsResponse)
 async def generate_tests(request: GenerateTestsRequest):
     """Endpoint to generate unit tests for given function or class code."""
+    if not ollama_available:
+        raise HTTPException(status_code=503, detail="Ollama is not available.")
     try:
         function_code = request.function_code
         response = test_chain.invoke({"function_code": function_code})
@@ -347,6 +375,8 @@ async def generate_tests(request: GenerateTestsRequest):
 @app.post("/get-embeddings", response_model=GetEmbeddingsResponse)
 async def get_embeddings(request: GetEmbeddingsRequest):
     """Endpoint to get embeddings for the provided text."""
+    if not ollama_available:
+        raise HTTPException(status_code=503, detail="Ollama is not available.")
     try:
         embeddings = ollama_emb.embed_query(request.text)
         return GetEmbeddingsResponse(embeddings=embeddings)

@@ -1,5 +1,3 @@
-// app/frontend/src/main.js
-
 import { app, BrowserWindow, session, ipcMain, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -16,6 +14,12 @@ import * as https from 'https';
 
 // Load environment variables from .env file (optional)
 dotenv.config();
+
+// **Updated: Read the USE_SERVER_EXECUTABLE flag from .env (case-insensitive)**
+// const USE_SERVER_EXECUTABLE = (process.env.USE_SERVER_EXECUTABLE || '').toLowerCase() === 'true';
+const USE_SERVER_EXECUTABLE = true;
+
+console.log(`USE_SERVER_EXECUTABLE is set to: ${USE_SERVER_EXECUTABLE}`);
 
 // Function to find an available port starting from a default
 const findAvailablePort = async (defaultPort) => {
@@ -51,6 +55,8 @@ const getServerExecutablePath = () => {
 };
 
 const SERVER_EXECUTABLE_PATH = getServerExecutablePath();
+
+console.log(`Server executable path: ${SERVER_EXECUTABLE_PATH}`);
 
 // Function to create the splash window
 const createSplashWindow = () => {
@@ -139,13 +145,13 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
   log('Application started');
   log(`Server path: ${SERVER_EXECUTABLE_PATH}`);
 
-  console.log('Server path:', SERVER_EXECUTABLE_PATH);
-
   // Check if the server executable exists
   if (!fs.existsSync(SERVER_EXECUTABLE_PATH)) {
-    log(`Server executable not found at ${SERVER_EXECUTABLE_PATH}`);
-    dialog.showErrorBox('Server Start Error', `Server executable not found at ${SERVER_EXECUTABLE_PATH}`);
-    app.quit();
+    const errorMsg = `Server executable not found at ${SERVER_EXECUTABLE_PATH}`;
+    log(errorMsg);
+    dialog.showErrorBox('Server Start Error', errorMsg);
+    // Instead of quitting, allow the developer to choose to proceed without the executable
+    // Optionally, you can prompt the developer here
     return;
   }
 
@@ -248,6 +254,16 @@ const waitForServer = async (url, timeout = 60000) => { // 1 minute timeout
       // Log to splash window
       if (splashWindow && !splashWindow.isDestroyed()) {
         splashWindow.webContents.send('server-log', `Waiting for server: ${error.message}`);
+      }
+
+      // Check if the server process has exited
+      if (serverProcess && serverProcess.exitCode !== null) {
+        const exitMessage = `Server process exited with code ${serverProcess.exitCode}`;
+        console.error(exitMessage);
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send('server-log', exitMessage);
+        }
+        throw new Error(exitMessage);
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -462,33 +478,49 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerIpcHandlers();
 
-  // Find available ports with error handling
+  // **Initialize ports based on USE_SERVER_EXECUTABLE flag**
   let OLLAMA_PORT, SERVER_PORT;
 
-  try {
-    OLLAMA_PORT = await findAvailablePort(11434);
-    SERVER_PORT = await findAvailablePort(8001);
-  } catch (error) {
-    console.error('Failed to find available ports:', error);
-    dialog.showErrorBox('Port Allocation Error', `Failed to find available ports: ${error.message}`);
-    app.quit();
-    return;
+  if (USE_SERVER_EXECUTABLE) {
+    // **When using the server executable:**
+    try {
+      OLLAMA_PORT = await findAvailablePort(11434);
+      SERVER_PORT = await findAvailablePort(8001);
+    } catch (error) {
+      console.error('Failed to find available ports:', error);
+      dialog.showErrorBox('Port Allocation Error', `Failed to find available ports: ${error.message}`);
+      app.quit();
+      return;
+    }
+
+    // Store the ports in global variables
+    global.OLLAMA_PORT = OLLAMA_PORT;
+    global.SERVER_PORT = SERVER_PORT;
+
+    // Start the server executable, passing the ports as arguments
+    startServerExecutable(SERVER_PORT, OLLAMA_PORT);
+  } else {
+    // **When connecting to an external server:**
+    // **Read ports from .env file or set defaults**
+    OLLAMA_PORT = parseInt(process.env.OLLAMA_PORT, 10) || 11434;
+    SERVER_PORT = parseInt(process.env.SERVER_PORT, 10) || 8001;
+
+    // Store the ports in global variables
+    global.OLLAMA_PORT = OLLAMA_PORT;
+    global.SERVER_PORT = SERVER_PORT;
   }
 
-  // Store the ports in global variables
-  global.OLLAMA_PORT = OLLAMA_PORT;
-  global.SERVER_PORT = SERVER_PORT;
-
-  // Start the server executable, passing the ports as arguments
-  startServerExecutable(SERVER_PORT, OLLAMA_PORT);
-
-  // Wait for the server to be ready
+  // **Wait for the server to be ready:**
   try {
     console.log('Waiting for server to be ready on port', SERVER_PORT);
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.webContents.send('server-log', `Waiting for server on port ${SERVER_PORT}`);
     }
-    await waitForServer(`http://127.0.0.1:${SERVER_PORT}/`);
+
+    // **Construct the server URL based on the USE_SERVER_EXECUTABLE flag**
+    const serverURL = `http://127.0.0.1:${SERVER_PORT}/`;
+
+    await waitForServer(serverURL);
 
     // Once the server is ready, create the main window
     createMainWindow();
