@@ -1,3 +1,5 @@
+// src/components/analyzer/Analyzer.jsx
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
     Box,
@@ -33,6 +35,8 @@ import {
     Description as DescriptionIcon,
     BugReport as BugReportIcon,
     Settings as SettingsIcon,
+    ArrowBack as ArrowBackIcon,
+    ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import PolylineOutlinedIcon from '@mui/icons-material/PolylineOutlined';
 import BorderedTreeView from '../components/analyzer/TreeDocumentation';
@@ -65,7 +69,7 @@ const Analyzer = () => {
     const [watchingDir, setWatchingDir] = useState('');
     const [viewMode, setViewMode] = useState('map');
     const [searchQuery, setSearchQuery] = useState('');
-    const [focusNode, setFocusNode] = useState(null);
+    const [focusNode, setFocusNode] = useState(null); // focusNode is a string ID
     const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [editedCode, setEditedCode] = useState('');
@@ -84,7 +88,8 @@ const Analyzer = () => {
     const [maxNodes, setMaxNodes] = useState(1000);
     const [maxEdges, setMaxEdges] = useState(5000);
     const [relationshipOrder, setRelationshipOrder] = useState('calledToCaller');
-    const [allFilteredNodes, setAllFilteredNodes] = useState([])
+    const [allFilteredNodes, setAllFilteredNodes] = useState([]);
+    const [currentSearchIndex, setCurrentSearchIndex] = useState(0); // New state for current search index
 
     useEffect(() => {
         const updateDrawerHeight = () => {
@@ -141,6 +146,10 @@ const Analyzer = () => {
         setFileCode('');
         setCodeSnippet('');
         setIsCodeExpanded(false);
+        setSearchQuery('');
+        setAllFilteredNodes([]);
+        setFocusNode(null);
+        setCurrentSearchIndex(0);
     };
 
     console.log('Selected Node:', editedCode);
@@ -358,7 +367,6 @@ const Analyzer = () => {
         }
     };
 
-
     /**
      * Handles search form submission.
      * @param {Event} e - The form submission event.
@@ -368,6 +376,8 @@ const Analyzer = () => {
 
         if (!searchQuery) {
             setFocusNode(null);
+            setAllFilteredNodes([]);
+            setCurrentSearchIndex(0);
             return;
         }
 
@@ -375,12 +385,15 @@ const Analyzer = () => {
             node.data.label.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
-
-        if (matchingNodes) {
+        if (matchingNodes && matchingNodes.length > 0) {
+            setAllFilteredNodes(matchingNodes);
+            setCurrentSearchIndex(0);
             setFocusNode(matchingNodes[0].id);
-            setAllFilteredNodes(matchingNodes)
         } else {
-            alert('Node not found');
+            alert('No matching nodes found.');
+            setFocusNode(null);
+            setAllFilteredNodes([]);
+            setCurrentSearchIndex(0);
         }
     };
 
@@ -388,11 +401,29 @@ const Analyzer = () => {
      * Handles going to the next node that matches the search query
      */
     const handleNextSearchedNode = () => {
-        const selectedNodeIndex = allFilteredNodes.indexOf(focusNode)
-        console.log(selectedNodeIndex, allFilteredNodes, focusNode)
-        setFocusNode(allFilteredNodes[selectedNodeIndex + 1])
+        if (!allFilteredNodes || allFilteredNodes.length === 0) {
+            alert('No search results to navigate.');
+            return;
+        }
 
-    }
+        const nextIndex = (currentSearchIndex + 1) % allFilteredNodes.length;
+        setCurrentSearchIndex(nextIndex);
+        setFocusNode(allFilteredNodes[nextIndex].id);
+    };
+
+    /**
+     * Handles going to the previous node that matches the search query
+     */
+    const handlePreviousSearchedNode = () => {
+        if (!allFilteredNodes || allFilteredNodes.length === 0) {
+            alert('No search results to navigate.');
+            return;
+        }
+
+        const prevIndex = (currentSearchIndex - 1 + allFilteredNodes.length) % allFilteredNodes.length;
+        setCurrentSearchIndex(prevIndex);
+        setFocusNode(allFilteredNodes[prevIndex].id);
+    };
 
     /**
      * Generates a unit test for the edited code.
@@ -487,7 +518,7 @@ const Analyzer = () => {
                     </Tooltip>
                 </Box>
 
-                {/* Search Form */}
+                {/* Enhanced Search Form */}
                 <Box
                     component="form"
                     onSubmit={handleSearch}
@@ -496,9 +527,10 @@ const Analyzer = () => {
                         p: '2px 4px',
                         display: 'flex',
                         alignItems: 'center',
-                        width: 250,
+                        width: 350,
 
                         borderRadius: 1,
+                        // backgroundColor: theme.palette.background.paper,
                     }}
                 >
                     <TextField
@@ -507,24 +539,46 @@ const Analyzer = () => {
                         inputProps={{ 'aria-label': 'search code' }}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        sx={{ ml: 1, flex: 1, px: 2, backgroundColor: theme.palette.background.paper }}
+                        sx={{ ml: 1, flex: 1, px: 2, backgroundColor: theme.palette.background.light }}
                         InputProps={{
                             disableUnderline: true,
                         }}
 
                     />
-                    <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
-                        <SearchIcon />
-                    </IconButton>
-                    <Button
-                        onClick={handleNextSearchedNode}
-                    >
-                        next
-                    </Button>
-                    <Typography>
-                        {allFilteredNodes.length}
-                    </Typography>
-
+                    <Tooltip title="Search">
+                        <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
+                            <SearchIcon />
+                        </IconButton>
+                    </Tooltip>
+                    {allFilteredNodes.length > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                            <Tooltip title="Previous Result">
+                                <span>
+                                    <IconButton
+                                        onClick={handlePreviousSearchedNode}
+                                        disabled={allFilteredNodes.length === 0}
+                                        aria-label="previous result"
+                                    >
+                                        <ArrowBackIcon />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                            <Tooltip title="Next Result">
+                                <span>
+                                    <IconButton
+                                        onClick={handleNextSearchedNode}
+                                        disabled={allFilteredNodes.length === 0}
+                                        aria-label="next result"
+                                    >
+                                        <ArrowForwardIcon />
+                                    </IconButton>
+                                </span>
+                            </Tooltip>
+                            <Typography sx={{ ml: 1 }}>
+                                {allFilteredNodes.length > 0 ? `${currentSearchIndex + 1} / ${allFilteredNodes.length}` : '0 / 0'}
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
             </Toolbar>
 
@@ -550,7 +604,7 @@ const Analyzer = () => {
                                         <CodeFlowChart
                                             key={watchingDir} // Force re-mount when directory changes
                                             data={results}
-                                            focusNode={focusNode}
+                                            focusNode={focusNode} // Pass focusNode as a string ID
                                         />
                                     ) : (
                                         <Paper sx={{ height: '100%', overflowY: 'auto', p: 2 }}>

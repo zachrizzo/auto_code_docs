@@ -9,9 +9,8 @@ module.exports = {
     executableName: "fractal-x", // Set the correct name here
     icon: "./dist/images/fractal-X-logo.png", // Set the correct path here
     extraResource: [
-      '../backend/app', // Path to the backend (assuming this is your FastAPI app folder)
-      '../backend/server.py', // FastAPI server entry file
       '../backend/ollama',  // Include the Ollama binary
+      '../backend/dist/server'
     ]
 
   },

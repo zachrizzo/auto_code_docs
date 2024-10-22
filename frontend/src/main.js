@@ -6,7 +6,7 @@ import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import Store from 'electron-store';
 import dotenv from 'dotenv';
-import { analyzeDirectory, initializeParser, insertCode } from '../src/utils/detector/detector.js';
+import { analyzeDirectory, initializeParser } from '../src/utils/detector/detector.js';
 import { transformToReactFlowData } from '../src/utils/transformToReactFlowData.js';
 import { spawn } from 'child_process';
 import getPort from 'get-port';
@@ -30,7 +30,7 @@ const findAvailablePort = async (defaultPort) => {
   }
 };
 
-let serverProcess = null; // Renamed from pythonProcess
+let serverProcess = null;
 let allowedBaseDir = null;
 const squirrelStartup = false;
 
@@ -38,10 +38,19 @@ const squirrelStartup = false;
 let splashWindow = null;
 let mainWindow = null;
 
+// Function to get server executable path
+const getServerExecutablePath = () => {
+  if (!app.isPackaged) {
+    // In development, use the local path
+    return path.join(__dirname, 'backend/server/server');
+  } else {
+    // In production, adjust the path
+    // __dirname points to the resources/app directory when packaged
+    return path.join(process.resourcesPath, 'server');
+  }
+};
 
-  // Path to your server executable
-  const SERVER_EXECUTABLE_PATH = path.join(__dirname, 'backend/server/server'); // Adjust the path and executable name as needed
-
+const SERVER_EXECUTABLE_PATH = getServerExecutablePath();
 
 // Function to create the splash window
 const createSplashWindow = () => {
@@ -54,11 +63,14 @@ const createSplashWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      preload: path.join(__dirname, '../../src/preload_splash.js'), // Use a separate preload script for splash window
+      devTools: !app.isPackaged, // Enable DevTools only in development
     },
   });
 
-  // splashWindow.webContents.openDevTools(); // Open DevTools for debugging (remove in production)
+  if (!app.isPackaged) {
+    splashWindow.webContents.openDevTools(); // Open DevTools for debugging in development
+  }
 
   // Load the splash.html file
   splashWindow.loadFile(path.join(__dirname, './static/splash.html'));
@@ -101,8 +113,9 @@ const createMainWindow = () => {
 
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools (remove in production)
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools(); // Open DevTools in development
+  }
 
   // Handle window closed
   mainWindow.on('closed', () => {
@@ -115,18 +128,18 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
   console.log('Starting server executable...');
   const logPath = path.join(app.getPath('logs'), 'app.log');
 
-  // // Function to log messages
-  // function log(message) {
-  //   const timestamp = new Date().toISOString();
-  //   const logMessage = `${timestamp}: ${message}\n`;
-  //   fs.appendFileSync(logPath, logMessage);
-  // }
+  // Function to log messages
+  function log(message) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `${timestamp}: ${message}\n`;
+    fs.appendFileSync(logPath, logMessage);
+  }
 
-  // // Use it like this:
-  // log('Application started');
-  // log(`Server path: ${SERVER_EXECUTABLE_PATH}`);
+  // Use it like this:
+  log('Application started');
+  log(`Server path: ${SERVER_EXECUTABLE_PATH}`);
 
-  console.log(SERVER_EXECUTABLE_PATH)
+  console.log('Server path:', SERVER_EXECUTABLE_PATH);
 
   // Check if the server executable exists
   if (!fs.existsSync(SERVER_EXECUTABLE_PATH)) {
@@ -136,9 +149,9 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
     return;
   }
 
-  // // Ensure the server executable has execute permissions
-  // fsPromises.access(SERVER_EXECUTABLE_PATH, fs.constants.X_OK)
-  //   .then(() => {
+  // Ensure the server executable has execute permissions (only necessary on Unix-like systems)
+  fsPromises.access(SERVER_EXECUTABLE_PATH, fs.constants.X_OK)
+    .then(() => {
       serverProcess = spawn(
         SERVER_EXECUTABLE_PATH,
         ['--server-port', SERVER_PORT.toString(), '--ollama-port', OLLAMA_PORT.toString()],
@@ -152,27 +165,48 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
       );
 
       serverProcess.stdout.on('data', (data) => {
-        console.log(`Server stdout: ${data}`);
+        const message = `Server stdout: ${data}`;
+        console.log(message);
+        log(message);
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send('server-log', data.toString());
+        }
       });
 
       serverProcess.stderr.on('data', (data) => {
-        console.error(`Server stderr: ${data}`);
+        const message = `Server stderr: ${data}`;
+        console.error(message);
+        log(message);
+        if (splashWindow && !splashWindow.isDestroyed()) {
+          splashWindow.webContents.send('server-log', data.toString());
+        }
       });
 
       serverProcess.on('close', (code) => {
-        console.log(`Server executable exited with code ${code}`);
+        const message = `Server executable exited with code ${code}`;
+        console.log(message);
+        log(message);
+        if (code !== 0) {
+          dialog.showErrorBox('Server Error', `Server exited with code ${code}`);
+          app.quit();
+        }
       });
 
       serverProcess.on('error', (err) => {
-        console.error('Failed to start server executable:', err);
-        dialog.showErrorBox('Server Start Error', `Failed to start server executable: ${err.message}`);
+        const message = `Failed to start server executable: ${err.message}`;
+        console.error(message);
+        log(message);
+        dialog.showErrorBox('Server Start Error', message);
+        app.quit();
       });
-    // })
-    // .catch((err) => {
-    //   console.error('Server executable is not accessible or lacks execute permissions:', err);
-    //   dialog.showErrorBox('Server Start Error', `Cannot start server executable: ${err.message}`);
-    //   app.quit();
-    // });
+    })
+    .catch((err) => {
+      const message = `Server executable is not accessible or lacks execute permissions: ${err.message}`;
+      console.error(message);
+      log(message);
+      dialog.showErrorBox('Server Start Error', message);
+      app.quit();
+    });
 };
 
 // Function to gracefully shut down the server executable
@@ -184,7 +218,7 @@ const gracefulShutdown = () => {
 };
 
 // Updated waitForServer function using http and https modules
-const waitForServer = async (url, timeout = 300000) => { // 5 minutes timeout
+const waitForServer = async (url, timeout = 60000) => { // 1 minute timeout
   const startTime = Date.now();
   const parsedUrl = new URL(url);
   const protocol = parsedUrl.protocol === 'https:' ? https : http;
@@ -209,11 +243,21 @@ const waitForServer = async (url, timeout = 300000) => { // 5 minutes timeout
       return true;
     } catch (error) {
       // Server not ready yet
-      console.error(`Error connecting to ${url}:`, error.message);
+      const errorMsg = `Error connecting to ${url}: ${error.message}`;
+      console.error(errorMsg);
+      // Log to splash window
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.webContents.send('server-log', `Waiting for server: ${error.message}`);
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error(`Server at ${url} did not start within the expected time.`);
+  const finalErrorMsg = `Server at ${url} did not start within the expected time.`;
+  console.error(finalErrorMsg);
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('server-log', finalErrorMsg);
+  }
+  throw new Error(finalErrorMsg);
 };
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -223,11 +267,10 @@ if (squirrelStartup) {
 
 // Register IPC handlers after the app is ready
 const registerIpcHandlers = () => {
-
   ipcMain.handle('get-ports', async () => {
     return {
-      OLLAMA_PORT,
-      SERVER_PORT
+      OLLAMA_PORT: global.OLLAMA_PORT,
+      SERVER_PORT: global.SERVER_PORT,
     };
   });
 
@@ -439,9 +482,12 @@ app.whenReady().then(async () => {
   // Start the server executable, passing the ports as arguments
   startServerExecutable(SERVER_PORT, OLLAMA_PORT);
 
-  // Optionally, wait for the server to be ready
+  // Wait for the server to be ready
   try {
     console.log('Waiting for server to be ready on port', SERVER_PORT);
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('server-log', `Waiting for server on port ${SERVER_PORT}`);
+    }
     await waitForServer(`http://127.0.0.1:${SERVER_PORT}/`);
 
     // Once the server is ready, create the main window
@@ -457,7 +503,7 @@ app.whenReady().then(async () => {
     mainWindow.webContents.on('did-finish-load', () => {
       mainWindow.webContents.send('ports-ready', {
         OLLAMA_PORT,
-        SERVER_PORT
+        SERVER_PORT,
       });
     });
   } catch (error) {

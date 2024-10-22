@@ -243,17 +243,17 @@ async def install_models_stream(request: ModelInstallRequest):
             env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
             env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
 
-            # Check if the model exists
-            result = subprocess.run([OLLAMA_BINARY_PATH, "list", "--port", str(OLLAMA_PORT)], capture_output=True, text=True, env=env)
+            # Check if the model exists without using --port
+            result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True, env=env)
 
             # Split the output into lines and check if the model name is in any of them
             model_exists = any(model_name in line.split() for line in result.stdout.splitlines())
 
             if not model_exists:
                 yield f"data: Installing model {model_name}...\n\n"
-                # Pull the model
+                # Pull the model without using --port
                 process = subprocess.Popen(
-                    [OLLAMA_BINARY_PATH, "pull", model_name, "--port", str(OLLAMA_PORT)],
+                    [OLLAMA_BINARY_PATH, "pull", model_name],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,

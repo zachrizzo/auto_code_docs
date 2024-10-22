@@ -1,4 +1,5 @@
 // src/components/analyzer/mindMap/CodeMap.jsx
+
 import React, { useCallback, useEffect, useState } from 'react';
 import ReactFlow, {
     Background,
@@ -65,8 +66,8 @@ function CodeFlowChart({ data, focusNode }) {
     );
 
     useEffect(() => {
-        if (focusNode.id) {
-            const node = getNode(focusNode.id);
+        if (focusNode) { // focusNode is a string ID
+            const node = getNode(focusNode);
             if (node && node.position) {
                 // Avoid using node.width and node.height directly as they might be undefined
                 const x = node.position.x || 0;
@@ -75,7 +76,7 @@ function CodeFlowChart({ data, focusNode }) {
                 setCenter(x, y, { zoom, duration: 500 });
             }
         }
-    }, [focusNode.id, getNode, setCenter]);
+    }, [focusNode, getNode, setCenter]);
 
     if (isLoading) {
         return (
