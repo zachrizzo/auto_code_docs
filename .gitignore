@@ -1,2 +1,5 @@
 .env
 backend/app/ollama/models
+# Ignore build and dist directories
+backend/build/
+backend/dist/
