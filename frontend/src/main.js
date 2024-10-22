@@ -1,29 +1,47 @@
-// main.js
+// app/frontend/src/main.js
 
 import { app, BrowserWindow, session, ipcMain, dialog } from 'electron';
-import path from 'node:path';
-import { promises as fs } from 'fs';
+import path from 'path';
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import Store from 'electron-store';
 import dotenv from 'dotenv';
 import { analyzeDirectory, initializeParser, insertCode } from '../src/utils/detector/detector.js';
 import { transformToReactFlowData } from '../src/utils/transformToReactFlowData.js';
 import { spawn } from 'child_process';
+import getPort from 'get-port';
+import { URL } from 'url';
+import * as http from 'http';
+import * as https from 'https';
 
 // Load environment variables from .env file (optional)
-dotenv.config()
-const OLLAMA_PORT = 11434; // Ensure this matches Ollama's port
-const SERVER_PORT = 8001;
+dotenv.config();
 
-console.log('Encryption Key:', process.env.ELECTRON_STORE_ENCRYPTION_KEY);
+// Function to find an available port starting from a default
+const findAvailablePort = async (defaultPort) => {
+  try {
+    // Manually create an array of ports from defaultPort to defaultPort + 1000
+    const portRange = Array.from({ length: 1001 }, (_, i) => defaultPort + i);
+    const port = await getPort({ port: portRange });
+    return port;
+  } catch (error) {
+    console.error(`Error finding available port starting from ${defaultPort}:`, error);
+    throw error;
+  }
+};
 
-const SERVER_SCRIPT_PATH = path.join(__dirname, 'backend/server/server');  // Adjust path if necessary
-let pythonProcess = null;
+let serverProcess = null; // Renamed from pythonProcess
 let allowedBaseDir = null;
 const squirrelStartup = false;
 
 // References to windows
 let splashWindow = null;
 let mainWindow = null;
+
+
+  // Path to your server executable
+  const SERVER_EXECUTABLE_PATH = path.join(__dirname, 'backend/server/server'); // Adjust the path and executable name as needed
+
 
 // Function to create the splash window
 const createSplashWindow = () => {
@@ -36,10 +54,11 @@ const createSplashWindow = () => {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
   });
 
-  splashWindow.webContents.openDevTools(); // Open DevTools for debugging (remove in production)
+  // splashWindow.webContents.openDevTools(); // Open DevTools for debugging (remove in production)
 
   // Load the splash.html file
   splashWindow.loadFile(path.join(__dirname, './static/splash.html'));
@@ -66,8 +85,7 @@ const createMainWindow = () => {
           "default-src 'self'; " +
           "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
           "style-src 'self' 'unsafe-inline'; " +
-          "connect-src 'self' http://127.0.0.1:8000 " +
-          "http://127.0.0.1:8001 " +
+          `connect-src 'self' http://127.0.0.1:${global.SERVER_PORT} http://127.0.0.1:${global.OLLAMA_PORT} ` +
           'https://*.firebaseio.com ' +
           'https://*.googleapis.com ' +
           'https://*.gstatic.com ' +
@@ -92,54 +110,106 @@ const createMainWindow = () => {
   });
 };
 
-// Function to start the Python server
-const startPythonServer = () => {
-  console.log('Starting Python server at ...', SERVER_SCRIPT_PATH);
-  pythonProcess = spawn(SERVER_SCRIPT_PATH, [], {
-    cwd: path.dirname(SERVER_SCRIPT_PATH),
-    env: {
-      ...process.env,
-    },
-    shell: false,
-  });
+// Function to start the server executable
+const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
+  console.log('Starting server executable...');
+  const logPath = path.join(app.getPath('logs'), 'app.log');
 
-  pythonProcess.stdout.on('data', (data) => {
-    console.log(`Python stdout: ${data}`);
-  });
+  // // Function to log messages
+  // function log(message) {
+  //   const timestamp = new Date().toISOString();
+  //   const logMessage = `${timestamp}: ${message}\n`;
+  //   fs.appendFileSync(logPath, logMessage);
+  // }
 
-  pythonProcess.stderr.on('data', (data) => {
-    console.error(`Python stderr: ${data}`);
-  });
+  // // Use it like this:
+  // log('Application started');
+  // log(`Server path: ${SERVER_EXECUTABLE_PATH}`);
 
-  pythonProcess.on('close', (code) => {
-    console.log(`Python server exited with code ${code}`);
-  });
+  console.log(SERVER_EXECUTABLE_PATH)
 
-  pythonProcess.on('error', (err) => {
-    console.error('Failed to start Python server:', err);
-  });
+  // Check if the server executable exists
+  if (!fs.existsSync(SERVER_EXECUTABLE_PATH)) {
+    log(`Server executable not found at ${SERVER_EXECUTABLE_PATH}`);
+    dialog.showErrorBox('Server Start Error', `Server executable not found at ${SERVER_EXECUTABLE_PATH}`);
+    app.quit();
+    return;
+  }
+
+  // // Ensure the server executable has execute permissions
+  // fsPromises.access(SERVER_EXECUTABLE_PATH, fs.constants.X_OK)
+  //   .then(() => {
+      serverProcess = spawn(
+        SERVER_EXECUTABLE_PATH,
+        ['--server-port', SERVER_PORT.toString(), '--ollama-port', OLLAMA_PORT.toString()],
+        {
+          cwd: path.dirname(SERVER_EXECUTABLE_PATH),
+          env: {
+            ...process.env,
+          },
+          shell: false,
+        }
+      );
+
+      serverProcess.stdout.on('data', (data) => {
+        console.log(`Server stdout: ${data}`);
+      });
+
+      serverProcess.stderr.on('data', (data) => {
+        console.error(`Server stderr: ${data}`);
+      });
+
+      serverProcess.on('close', (code) => {
+        console.log(`Server executable exited with code ${code}`);
+      });
+
+      serverProcess.on('error', (err) => {
+        console.error('Failed to start server executable:', err);
+        dialog.showErrorBox('Server Start Error', `Failed to start server executable: ${err.message}`);
+      });
+    // })
+    // .catch((err) => {
+    //   console.error('Server executable is not accessible or lacks execute permissions:', err);
+    //   dialog.showErrorBox('Server Start Error', `Cannot start server executable: ${err.message}`);
+    //   app.quit();
+    // });
 };
 
-// Function to gracefully shut down the Python server
+// Function to gracefully shut down the server executable
 const gracefulShutdown = () => {
-  if (pythonProcess) {
-    console.log('Terminating Python server...');
-    pythonProcess.kill('SIGTERM');
+  if (serverProcess) {
+    console.log('Terminating server executable...');
+    serverProcess.kill('SIGTERM');
   }
 };
 
-// Optional: Wait for the server to be ready
-const waitForServer = async (url, timeout = 50000) => {
+// Updated waitForServer function using http and https modules
+const waitForServer = async (url, timeout = 300000) => { // 5 minutes timeout
   const startTime = Date.now();
+  const parsedUrl = new URL(url);
+  const protocol = parsedUrl.protocol === 'https:' ? https : http;
   while (Date.now() - startTime < timeout) {
     try {
-      const response = await fetch(url);
-      if (response.ok) {
-        console.log(`Server at ${url} is up and running.`);
-        return true;
-      }
+      await new Promise((resolve, reject) => {
+        const req = protocol.get(url, (res) => {
+          res.on('data', () => { }); // Consume data to allow 'end' event to be emitted
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 400) {
+              resolve();
+            } else {
+              reject(new Error(`Status code ${res.statusCode}`));
+            }
+          });
+        });
+        req.on('error', (err) => {
+          reject(err);
+        });
+      });
+      console.log(`Server at ${url} is up and running.`);
+      return true;
     } catch (error) {
       // Server not ready yet
+      console.error(`Error connecting to ${url}:`, error.message);
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -153,6 +223,14 @@ if (squirrelStartup) {
 
 // Register IPC handlers after the app is ready
 const registerIpcHandlers = () => {
+
+  ipcMain.handle('get-ports', async () => {
+    return {
+      OLLAMA_PORT,
+      SERVER_PORT
+    };
+  });
+
   // IPC Handlers for Service Accounts
   ipcMain.handle('get-service-accounts', async () => {
     return store.get('serviceAccounts');
@@ -171,7 +249,7 @@ const registerIpcHandlers = () => {
     const configs = store.get('serviceAccounts') || [];
     console.log('Current Service Accounts:', configs);
     const updatedConfigs = configs.filter(
-      (config) => config.content.project_id !== projectId // or config.content.projectId
+      (config) => config.content.project_id !== projectId // Adjust based on actual data structure
     );
     console.log('Updated Service Accounts:', updatedConfigs);
     store.set('serviceAccounts', updatedConfigs);
@@ -224,16 +302,6 @@ const registerIpcHandlers = () => {
     }
   });
 
-  // ipcMain.handle('insert-code', async (event, { filePath, declarationInfo, newCode }) => {
-  //   try {
-  //     await insertCode(filePath, declarationInfo, newCode);
-  //     return { success: true };
-  //   } catch (error) {
-  //     console.error('Error inserting code:', error);
-  //     return { success: false, error: error.message };
-  //   }
-  // });
-
   ipcMain.handle('save-file', async (event, { filePath, content }) => {
     console.log('Main: save-file invoked', { filePath, content }); // Debugging log
     try {
@@ -247,7 +315,7 @@ const registerIpcHandlers = () => {
         throw new Error('Access to the specified file is not allowed.');
       }
 
-      await fs.writeFile(resolvedPath, content, 'utf-8');
+      await fsPromises.writeFile(resolvedPath, content, 'utf-8');
       console.log(`File saved successfully at ${resolvedPath}`); // Confirmation log
       return { success: true };
     } catch (error) {
@@ -282,7 +350,7 @@ const registerIpcHandlers = () => {
         throw new Error('Access to the specified file is not allowed.');
       }
 
-      const content = await fs.readFile(resolvedPath, 'utf-8');
+      const content = await fsPromises.readFile(resolvedPath, 'utf-8');
       return { success: true, content };
     } catch (error) {
       console.error('Error reading file content:', error);
@@ -308,14 +376,14 @@ const initializeStore = () => {
     },
   };
 
-  let store;
+  let storeInstance;
   try {
-    const encryptionKey = process.env.ELECTRON_STORE_ENCRYPTION_KEY;
+    const encryptionKey = process.env.ELECTRON_STORE_ENCRYPTION_KEY || 'default_encryption_key';
     if (!encryptionKey) {
       throw new Error('Missing ELECTRON_STORE_ENCRYPTION_KEY');
     }
 
-    store = new Store({
+    storeInstance = new Store({
       name: 'FirebaseConfigManager',
       schema,
       encryptionKey,
@@ -328,7 +396,7 @@ const initializeStore = () => {
   } catch (error) {
     console.error('Error initializing store:', error);
     // Optionally, reinitialize store without encryption or alert the user
-    store = new Store({
+    storeInstance = new Store({
       name: 'FirebaseConfigManager',
       schema,
       // Remove encryptionKey or set a default one (not recommended for sensitive data)
@@ -338,15 +406,10 @@ const initializeStore = () => {
       },
     });
   }
-  return store;
+  return storeInstance;
 };
 
 const store = initializeStore();
-
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (squirrelStartup) {
-  app.quit();
-}
 
 // App ready event
 app.whenReady().then(async () => {
@@ -356,13 +419,30 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerIpcHandlers();
 
-  // Start the Python FastAPI server
-  startPythonServer();
+  // Find available ports with error handling
+  let OLLAMA_PORT, SERVER_PORT;
+
+  try {
+    OLLAMA_PORT = await findAvailablePort(11434);
+    SERVER_PORT = await findAvailablePort(8001);
+  } catch (error) {
+    console.error('Failed to find available ports:', error);
+    dialog.showErrorBox('Port Allocation Error', `Failed to find available ports: ${error.message}`);
+    app.quit();
+    return;
+  }
+
+  // Store the ports in global variables
+  global.OLLAMA_PORT = OLLAMA_PORT;
+  global.SERVER_PORT = SERVER_PORT;
+
+  // Start the server executable, passing the ports as arguments
+  startServerExecutable(SERVER_PORT, OLLAMA_PORT);
 
   // Optionally, wait for the server to be ready
   try {
+    console.log('Waiting for server to be ready on port', SERVER_PORT);
     await waitForServer(`http://127.0.0.1:${SERVER_PORT}/`);
-    await waitForServer(`http://127.0.0.1:${OLLAMA_PORT}/`);
 
     // Once the server is ready, create the main window
     createMainWindow();
@@ -372,6 +452,14 @@ app.whenReady().then(async () => {
       splashWindow.close();
       splashWindow = null;
     }
+
+    // Send the port information to the renderer process
+    mainWindow.webContents.on('did-finish-load', () => {
+      mainWindow.webContents.send('ports-ready', {
+        OLLAMA_PORT,
+        SERVER_PORT
+      });
+    });
   } catch (error) {
     console.error(error);
     // Show an error dialog to the user
@@ -381,7 +469,6 @@ app.whenReady().then(async () => {
     return;
   }
 
-
   // Re-create a window in the app when the dock icon is clicked (macOS)
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -390,7 +477,7 @@ app.whenReady().then(async () => {
   });
 });
 
-// Gracefully shut down the Python server when Electron app quits
+// Gracefully shut down the server executable when Electron app quits
 app.on('before-quit', gracefulShutdown);
 
 // Quit when all windows are closed, except on macOS.

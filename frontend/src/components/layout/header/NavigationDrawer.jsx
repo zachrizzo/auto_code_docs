@@ -7,8 +7,9 @@ import {
     ListItem,
     ListItemIcon,
     ListItemText,
-    useTheme,
+    useTheme
 } from '@mui/material';
+
 import { Link as RouterLink } from 'react-router-dom';
 import HomeIcon from '@mui/icons-material/Home';
 import AnalyticsIcon from '@mui/icons-material/Analytics';
@@ -32,8 +33,8 @@ const NavigationDrawer = ({ open, onClose }) => {
             PaperProps={{
                 sx: {
                     width: 240,
-                    backgroundColor: theme.palette.background.default,
-                    backgroundImage: `linear-gradient(45deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                    backgroundColor: theme.palette.background.light,
+                    // backgroundImage: `linear-gradient(45deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
                 },
             }}
         >
@@ -51,12 +52,12 @@ const NavigationDrawer = ({ open, onClose }) => {
                             },
                         }}
                     >
-                        <ListItemIcon sx={{ color: theme.palette.common.white }}>
+                        <ListItemIcon sx={{ color: theme.palette.text }}>
                             {item.icon}
                         </ListItemIcon>
                         <ListItemText
                             primary={item.text}
-                            sx={{ color: theme.palette.common.white }}
+                            sx={{ color: theme.palette.text.primary }}
                         />
                     </ListItem>
                 ))}

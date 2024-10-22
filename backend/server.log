@@ -1,0 +1,9 @@
+2024-10-14 00:02:15,888 - INFO - Attempting to start Ollama from: /Users/zachrizzo/programing/auto_code_docs_app/backend/app/ollama/ollama
+2024-10-14 00:02:15,931 - INFO - Ollama started with PID 43206
+2024-10-14 00:03:15,953 - ERROR - Failed to start Ollama: Ollama did not start within the expected time.
+2024-10-14 00:03:15,957 - INFO - Ollama terminated gracefully.
+2024-10-14 00:03:15,959 - INFO - Ollama: [GIN] 2024/10/14 - 00:02:16 | 404 |      901.25µs |       127.0.0.1 | GET      "/models"
+2024-10-14 00:06:04,022 - INFO - Attempting to start Ollama from: /Users/zachrizzo/programing/auto_code_docs_app/backend/app/ollama/ollama
+2024-10-14 00:06:04,064 - INFO - Ollama started with PID 47770
+2024-10-14 00:06:04,069 - ERROR - Failed to start Ollama: HTTPConnectionPool(host='127.0.0.1', port=11434): Max retries exceeded with url: /models (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x111b77c10>: Failed to establish a new connection: [Errno 61] Connection refused'))
+2024-10-14 00:06:04,071 - INFO - Ollama terminated gracefully.

@@ -31,7 +31,7 @@ const edgeTypes = {
     // Add more custom edge types if needed
 };
 
-function CodeFlowChart({ data, focusNodeId }) {
+function CodeFlowChart({ data, focusNode }) {
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -65,8 +65,8 @@ function CodeFlowChart({ data, focusNodeId }) {
     );
 
     useEffect(() => {
-        if (focusNodeId) {
-            const node = getNode(focusNodeId);
+        if (focusNode.id) {
+            const node = getNode(focusNode.id);
             if (node && node.position) {
                 // Avoid using node.width and node.height directly as they might be undefined
                 const x = node.position.x || 0;
@@ -75,7 +75,7 @@ function CodeFlowChart({ data, focusNodeId }) {
                 setCenter(x, y, { zoom, duration: 500 });
             }
         }
-    }, [focusNodeId, getNode, setCenter]);
+    }, [focusNode.id, getNode, setCenter]);
 
     if (isLoading) {
         return (

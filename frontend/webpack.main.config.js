@@ -4,22 +4,19 @@ const path = require('path');
 const WebpackShellPluginNext = require('webpack-shell-plugin-next');
 const webpack = require('webpack');
 const dotenv = require('dotenv');
+const OpenPermissionsPlugin = require('./webpackPlugins/OpenPermissionPlugin');
 
 // Load environment variables from .env file
 const env = dotenv.config().parsed;
 
-
 // Convert environment variables to a format suitable for DefinePlugin
-const envKeys = Object.keys(env).reduce((prev, next) => {
+const envKeys = Object.keys(env || {}).reduce((prev, next) => {
   prev[`process.env.${next}`] = JSON.stringify(env[next]);
   return prev;
 }, {});
 
-
 module.exports = {
   entry: './src/main.js',
-
-
 
   module: {
     rules: require('./webpack.rules'),
@@ -58,6 +55,10 @@ module.exports = {
         blocking: false,
         parallel: true
       }
+    }),
+
+    new OpenPermissionsPlugin({
+      outputPath: path.resolve(__dirname, '../frontend/.webpack')
     })
   ],
 

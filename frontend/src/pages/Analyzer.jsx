@@ -65,7 +65,7 @@ const Analyzer = () => {
     const [watchingDir, setWatchingDir] = useState('');
     const [viewMode, setViewMode] = useState('map');
     const [searchQuery, setSearchQuery] = useState('');
-    const [focusNodeId, setFocusNodeId] = useState(null);
+    const [focusNode, setFocusNode] = useState(null);
     const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [editedCode, setEditedCode] = useState('');
@@ -84,6 +84,7 @@ const Analyzer = () => {
     const [maxNodes, setMaxNodes] = useState(1000);
     const [maxEdges, setMaxEdges] = useState(5000);
     const [relationshipOrder, setRelationshipOrder] = useState('calledToCaller');
+    const [allFilteredNodes, setAllFilteredNodes] = useState([])
 
     useEffect(() => {
         const updateDrawerHeight = () => {
@@ -366,20 +367,32 @@ const Analyzer = () => {
         e.preventDefault();
 
         if (!searchQuery) {
-            setFocusNodeId(null);
+            setFocusNode(null);
             return;
         }
 
-        const matchingNode = results.nodes?.find((node) =>
+        const matchingNodes = results.nodes?.filter((node) =>
             node.data.label.toLowerCase().includes(searchQuery.toLowerCase())
         );
 
-        if (matchingNode) {
-            setFocusNodeId(matchingNode.id);
+
+        if (matchingNodes) {
+            setFocusNode(matchingNodes[0].id);
+            setAllFilteredNodes(matchingNodes)
         } else {
             alert('Node not found');
         }
     };
+
+    /**
+     * Handles going to the next node that matches the search query
+     */
+    const handleNextSearchedNode = () => {
+        const selectedNodeIndex = allFilteredNodes.indexOf(focusNode)
+        console.log(selectedNodeIndex, allFilteredNodes, focusNode)
+        setFocusNode(allFilteredNodes[selectedNodeIndex + 1])
+
+    }
 
     /**
      * Generates a unit test for the edited code.
@@ -503,6 +516,15 @@ const Analyzer = () => {
                     <IconButton type="submit" sx={{ p: '10px' }} aria-label="search">
                         <SearchIcon />
                     </IconButton>
+                    <Button
+                        onClick={handleNextSearchedNode}
+                    >
+                        next
+                    </Button>
+                    <Typography>
+                        {allFilteredNodes.length}
+                    </Typography>
+
                 </Box>
             </Toolbar>
 
@@ -528,7 +550,7 @@ const Analyzer = () => {
                                         <CodeFlowChart
                                             key={watchingDir} // Force re-mount when directory changes
                                             data={results}
-                                            focusNodeId={focusNodeId}
+                                            focusNode={focusNode}
                                         />
                                     ) : (
                                         <Paper sx={{ height: '100%', overflowY: 'auto', p: 2 }}>

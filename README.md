@@ -349,6 +349,18 @@ If the tree-sitter.wasm file is missing, install the web-tree-sitter package and
 cp node_modules/web-tree-sitter/tree-sitter.wasm .wasm/tree-sitter.wasm
 ```
 
+If you run into this error:
+
+```bash
+1. Cannot find module '@electron-forge/plugin-fuses'
+```
+
+you can run this:
+
+```bash
+npm install --save-dev @electron-forge/plugin-fuses
+```
+
 ### 6. Running the Application
 
 To clean and rebuild the project after changes:

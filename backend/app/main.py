@@ -1,4 +1,5 @@
-# main.py
+# app/backend/main.py
+
 import os
 import socket
 import subprocess
@@ -8,6 +9,7 @@ import psutil
 import re
 import json
 import hashlib
+import argparse
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,9 +61,17 @@ os.makedirs(OLLAMA_MODELS_DIR, exist_ok=True)
 os.environ['OLLAMA_DATA'] = OLLAMA_DATA_DIR
 os.environ['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR
 
-# Define other constants
-OLLAMA_PORT = 11434  # Default Ollama port
-SERVER_PORT = 8001    # FastAPI server port
+# Parse command-line arguments for dynamic ports
+parser = argparse.ArgumentParser()
+parser.add_argument('--ollama-port', type=int, default=11434, help='Port for Ollama')
+parser.add_argument('--server-port', type=int, default=8001, help='Port for FastAPI server')
+args = parser.parse_args()
+
+OLLAMA_PORT = args.ollama_port  # Use the port passed as an argument
+SERVER_PORT = args.server_port  # FastAPI server port
+
+# Set environment variable for Ollama port
+os.environ['OLLAMA_PORT'] = str(OLLAMA_PORT)
 
 # List of models to manage
 ollama_models = ['llama3:8b']
@@ -79,12 +89,14 @@ def is_port_in_use(port):
             return True
 
 def is_ollama_running():
-    """Check if the Ollama process is running."""
+    """Check if the Ollama process is running on the specified port."""
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         if proc.info['name'] and 'ollama' in proc.info['name']:
-            return True
+            if f'--port={OLLAMA_PORT}' in proc.info['cmdline']:
+                return True
         if proc.info['cmdline'] and any('ollama' in cmd for cmd in proc.info['cmdline']):
-            return True
+            if f'--port={OLLAMA_PORT}' in proc.info['cmdline']:
+                return True
     return False
 
 def start_ollama():
@@ -97,25 +109,26 @@ def start_ollama():
         try:
             env = os.environ.copy()
             env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
+            env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
 
             if not os.path.exists(OLLAMA_BINARY_PATH):
                 raise FileNotFoundError(f"Ollama binary not found at {OLLAMA_BINARY_PATH}")
 
             ollama_process = subprocess.Popen(
-                [OLLAMA_BINARY_PATH, "serve"],
+                [OLLAMA_BINARY_PATH, "serve", "--port", str(OLLAMA_PORT)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env
             )
             logging.info(f"Ollama started with PID {ollama_process.pid}")
             # Wait for Ollama to be ready
-            timeout = 30  # seconds
+            timeout = 10  # seconds
             start_time = time.time()
             while time.time() - start_time < timeout:
-                if is_port_in_use(OLLAMA_PORT):
+                if not is_port_in_use(OLLAMA_PORT):
                     logging.info("Ollama is up and running.")
                     return
-                time.sleep(1)
+                time.sleep(0.5)
             raise Exception("Ollama did not start within the expected time.")
         except Exception as e:
             logging.error(f"Failed to start Ollama: {e}")
@@ -198,7 +211,7 @@ class ModelCheckResponse(BaseModel):
     missing_models: List[str]
 
 # Define the Ollama LLM for documentation and unit test generation
-llm = ChatOllama(model=ollama_models[0], temperature=0)
+llm = ChatOllama(model=ollama_models[0], temperature=0, base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
 doc_prompt = PromptTemplate(
     template="""You are an AI assistant tasked with generating documentation in 5 sentences for the following functions or classes.
     {function_code}
@@ -218,7 +231,7 @@ test_prompt = PromptTemplate(
 doc_chain = doc_prompt | llm | StrOutputParser()
 test_chain = test_prompt | llm | StrOutputParser()
 
-ollama_emb = OllamaEmbeddings(model=ollama_models[0])
+ollama_emb = OllamaEmbeddings(model=ollama_models[0], base_url=f"http://127.0.0.1:{OLLAMA_PORT}")
 
 async def install_models_stream(request: ModelInstallRequest):
     """Stream the model installation process."""
@@ -228,9 +241,10 @@ async def install_models_stream(request: ModelInstallRequest):
         try:
             env = os.environ.copy()
             env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
+            env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
 
             # Check if the model exists
-            result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True, env=env)
+            result = subprocess.run([OLLAMA_BINARY_PATH, "list", "--port", str(OLLAMA_PORT)], capture_output=True, text=True, env=env)
 
             # Split the output into lines and check if the model name is in any of them
             model_exists = any(model_name in line.split() for line in result.stdout.splitlines())
@@ -239,7 +253,7 @@ async def install_models_stream(request: ModelInstallRequest):
                 yield f"data: Installing model {model_name}...\n\n"
                 # Pull the model
                 process = subprocess.Popen(
-                    [OLLAMA_BINARY_PATH, "pull", model_name],
+                    [OLLAMA_BINARY_PATH, "pull", model_name, "--port", str(OLLAMA_PORT)],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
@@ -270,9 +284,10 @@ async def check_models(request: ModelCheckRequest):
     try:
         env = os.environ.copy()
         env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
+        env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
 
         # Get the list of installed models
-        result = subprocess.run([OLLAMA_BINARY_PATH, "list"], capture_output=True, text=True, env=env)
+        result = subprocess.run([OLLAMA_BINARY_PATH, "list", "--port", str(OLLAMA_PORT)], capture_output=True, text=True, env=env)
         installed_models = [line.split()[0] for line in result.stdout.splitlines()]
 
         # Determine missing models
