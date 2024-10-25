@@ -355,7 +355,7 @@ If you run into this error:
 1. Cannot find module '@electron-forge/plugin-fuses'
 ```
 
-you can run this:
+you can run this, not in the vs code terminal but in your main one. I was not able to get it working in vscode:
 
 ```bash
 npm install --save-dev @electron-forge/plugin-fuses
