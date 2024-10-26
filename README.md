@@ -32,7 +32,17 @@ The frontend is built with React using Material UI for styling, and Firebase han
     - [5. Debugging Common Issues](#5-debugging-common-issues)
     - [6. Running the Application](#6-running-the-application)
     - [7. Conclusion](#7-conclusion)
-  - [License](#license)
+- [MacOS Python Bundle Signing in Electron Apps](#macos-python-bundle-signing-in-electron-apps)
+  - [Issue: Server Initialization Failed (Exit Code 255)](#issue-server-initialization-failed-exit-code-255)
+  - [Solution](#solution)
+    - [1. Create a PyInstaller Spec File](#1-create-a-pyinstaller-spec-file)
+    - [2. Create Build Script](#2-create-build-script)
+    - [3. Create Entitlements File](#3-create-entitlements-file)
+    - [4. Update package.json](#4-update-packagejson)
+    - [5. Configure Electron Forge](#5-configure-electron-forge)
+  - [Important Notes](#important-notes)
+  - [Verification](#verification)
+  - [Troubleshooting](#troubleshooting)
 
 ## Installation
 
@@ -374,4 +384,194 @@ npm run make  # Or the equivalent command in your setup\
 
 This setup allows you to integrate Tree-sitter into an Electron application with Webpack, handle .wasm files for language parsers like JavaScript and Python, and avoid common pitfalls. Ensure that the WebAssembly files are correctly copied and loaded, and adjust the paths based on your project structure.
 
-## License
+# MacOS Python Bundle Signing in Electron Apps
+
+## Issue: Server Initialization Failed (Exit Code 255)
+
+When building an Electron application that includes a PyInstaller-bundled Python backend, you might encounter a critical error in production builds where the server fails to initialize with exit code 255. This typically manifests with an error message like:
+
+```bash
+[PYI-86608:ERROR] Failed to load Python shared library 'libpython3.11.dylib': dlopen: dlopen(...)
+... code signature not valid for use in process: mapping process and mapped file (non-platform) have different Team IDs
+```
+
+This error occurs because:
+
+1. The PyInstaller-bundled Python application includes `libpython3.11.dylib`
+2. MacOS security features require proper code signing of all binaries
+3. The Team IDs between the main app and the Python libraries don't match
+
+## Solution
+
+### 1. Create a PyInstaller Spec File
+
+Create `server.spec` in your backend directory:
+
+```python
+block_cipher = None
+
+a = Analysis(
+    ['server.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='server',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    target_arch=None,
+    codesign_identity='Developer ID Application: Your Name (YOUR_TEAM_ID)',
+    entitlements_file='entitlements.plist'
+)
+```
+
+### 2. Create Build Script
+
+Create `build_server.sh` in your backend directory:
+
+```bash
+#!/bin/bash
+
+# Clean previous builds
+rm -rf build dist
+
+# Build with PyInstaller using spec file
+pyinstaller server.spec
+
+# Sign the binary and its dependencies
+IDENTITY="Developer ID Application: Your Name (YOUR_TEAM_ID)"
+
+# Sign all dylibs
+find dist/server -name "*.dylib" -exec codesign --force --sign "$IDENTITY" --entitlements entitlements.plist --options runtime {} \;
+
+# Sign the main executable
+codesign --force --sign "$IDENTITY" --entitlements entitlements.plist --options runtime dist/server
+
+# Set permissions
+chmod 755 dist/server
+```
+
+### 3. Create Entitlements File
+
+Create `entitlements.plist` in your backend directory:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+    <key>com.apple.security.library-validation</key>
+    <false/>
+    <key>com.apple.security.inherit</key>
+    <true/>
+  </dict>
+</plist>
+```
+
+### 4. Update package.json
+
+Update your build script in `package.json`:
+
+```json
+{
+  "scripts": {
+    "bundle:backend": "cd ../backend && chmod +x build_server.sh && ./build_server.sh"
+  }
+}
+```
+
+### 5. Configure Electron Forge
+
+Update your `forge.config.js`:
+
+```javascript
+module.exports = {
+  packagerConfig: {
+    asar: true,
+    asarUnpack: [
+      "**/*.wasm",
+      "**/backend/server/**/*",
+      "**/backend/server/ollama/**/*",
+    ],
+    executableName: "your-app-name",
+    extraResource: ["../backend/dist/server", "../backend/ollama"],
+    osxSign: {
+      identity: "Developer ID Application: Your Name (YOUR_TEAM_ID)",
+      hardenedRuntime: true,
+      "gatekeeper-assess": false,
+      entitlements: "entitlements.mac.plist",
+      "entitlements-inherit": "entitlements.mac.plist",
+      "signature-flags": "library",
+    },
+    osxNotarize: {
+      appleId: process.env.APPLE_ID,
+      appleIdPassword: process.env.APPLE_ID_PASSWORD,
+      teamId: process.env.APPLE_TEAM_ID,
+    },
+  },
+  // ... rest of your config
+};
+```
+
+## Important Notes
+
+1. **Team ID**: Replace `YOUR_TEAM_ID` with your actual Apple Developer Team ID
+2. **Permissions**: Use `755` instead of `777` for security best practices
+3. **Environment Variables**: Ensure all required environment variables are set:
+   - `APPLE_ID`
+   - `APPLE_ID_PASSWORD`
+   - `APPLE_TEAM_ID`
+
+## Verification
+
+You can verify the signing of your binaries using:
+
+```bash
+codesign -dvv path/to/your/server
+```
+
+A properly signed binary should show your Team ID and proper signing authorities.
+
+## Troubleshooting
+
+If you still encounter issues:
+
+1. Check the logs in your app's user data directory
+2. Verify all binaries are signed with `codesign -dvv`
+3. Ensure all paths in your config files are correct
+4. Verify the architecture matches your target platform (arm64 vs x64)

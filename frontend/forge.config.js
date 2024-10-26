@@ -1,31 +1,29 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const path = require('path');
 require('dotenv').config();
-
 
 module.exports = {
   packagerConfig: {
     asar: true,
-    asarUnpack: "**/*.wasm",
+    asarUnpack: [
+      "**/*.wasm",
+      "**/backend/server/**/*",
+      "**/backend/server/ollama/**/*"
+    ],
     executableName: "fractal-x",
     icon: "./dist/images/fractal-X-logo.png",
+    // Fix: Change extraResource to use string paths instead of objects
     extraResource: [
       '../backend/ollama',
       '../backend/dist/server'
     ],
-    appBundleId: 'com.zachrizzo.fractalx',
-    extendInfo: {
-      LSMinimumSystemVersion: '10.15.0',
-      CFBundleVersion: '1.0.0',
-      CFBundleShortVersionString: '1.0.0',
-      NSHighResolutionCapable: true,
-      NSRequiresAquaSystemAppearance: false
-    },
     osxSign: {
       identity: 'Developer ID Application: Zach Rizzo (PY886R2W36)',
       hardenedRuntime: true,
-      entitlements: 'entitlements.plist',
-      'entitlements-inherit': 'entitlements.plist',
+      'gatekeeper-assess': false,
+      entitlements: 'entitlements.mac.plist',
+      'entitlements-inherit': 'entitlements.mac.plist',
       'signature-flags': 'library'
     },
     osxNotarize: {
@@ -85,19 +83,6 @@ module.exports = {
         },
       },
     },
-    // {
-    //   name: '@electron-forge/plugin-fuses',
-    //   config: {
-    //     version: FuseVersion.V1,
-    //     [FuseV1Options.RunAsNode]: false,
-    //     // [FuseV1Options.EnableCookieEncryption]: true,
-    //     // [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
-    //     // [FuseV1Options.EnableNodeCliInspectArguments]: false,
-    //     // [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-    //     // [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    //     // [FuseV1Options.RUNS_ALLOW_UNPACKED]: false,
-    //   }
-    // }
     new FusesPlugin({
       version: FuseVersion.V1,
       [FuseV1Options.RunAsNode]: false,
