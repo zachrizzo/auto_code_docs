@@ -5,7 +5,6 @@ import uvicorn
 import argparse
 import logging
 import socket
-from app.ollama_path_fix import ensure_binary_exists
 
 def is_port_available(port: int) -> bool:
     """Check if a port is available."""
@@ -34,14 +33,10 @@ def main():
     parser = argparse.ArgumentParser(description="Start the FastAPI server with dynamic ports.")
     parser.add_argument('--ollama-port', type=int, default=11434, help='Starting port for Ollama')
     parser.add_argument('--server-port', type=int, default=8001, help='Starting port for FastAPI server')
-    # parser.add_argument('--prod', action='store_true', default=False, help='Run in production mode')
-
+    args = parser.parse_args()
+    logging.info(f'Initial arguments: {args}')
 
     try:
-        args = parser.parse_args()
-        logging.info(f'Initial arguments: {args}')
-        # logging.info(f'Server is in production mode: {}')
-
         # Find available ports
         ollama_port = find_available_port(args.ollama_port)
         if ollama_port != args.ollama_port:
@@ -51,13 +46,23 @@ def main():
         if server_port != args.server_port:
             logging.warning(f"Default server port {args.server_port} was taken, using port {server_port} instead")
 
+        # Set environment variables
+        os.environ['OLLAMA_PORT'] = str(ollama_port)
+        os.environ['SERVER_PORT'] = str(server_port)
+
         # Get the appropriate Ollama binary path
+        from app.ollama.ollama_path_fix import ensure_binary_exists
         binary_path = ensure_binary_exists()
         logging.info(f"Using Ollama binary at: {binary_path}")
 
         # Set environment variables
         os.environ['OLLAMA_PATH'] = binary_path
-        os.environ['OLLAMA_PORT'] = str(ollama_port)
+
+        # Set settings variables
+        from app.config import settings
+        settings.OLLAMA_PORT = ollama_port
+        settings.SERVER_PORT = server_port
+        settings.OLLAMA_BINARY_PATH = binary_path
 
         # Import app only after environment is setup
         from app.main import app
