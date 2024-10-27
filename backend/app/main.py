@@ -30,6 +30,7 @@ from langchain_community.embeddings import OllamaEmbeddings
 import sys
 
 from app.database.firebase import fetch_and_list_doc_types
+from app.ollama_path_fix import ensure_binary_exists  # Import ensure_binary_exists
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,8 +64,10 @@ def get_resource_path(relative_path):
 
     return os.path.join(base_path, relative_path)
 
-# Update the paths using the new function
-OLLAMA_BINARY_PATH =  shutil.which("ollama")
+# Use ensure_binary_exists to get OLLAMA_BINARY_PATH
+OLLAMA_BINARY_PATH = ensure_binary_exists()  # Adjust isProd as needed
+
+# Update the data and models directories
 OLLAMA_DATA_DIR = get_resource_path("ollama")
 OLLAMA_MODELS_DIR = get_resource_path("ollama/models")
 
@@ -115,12 +118,12 @@ def is_ollama_running():
 
 def start_ollama():
     """Start the Ollama server as a subprocess."""
-    # Use shutil.which to find Ollama in the system PATH
+    # OLLAMA_BINARY_PATH is obtained from ensure_binary_exists
     binary_path = OLLAMA_BINARY_PATH
-    if not binary_path:
-        raise FileNotFoundError("Ollama binary not found in system PATH. Please ensure Ollama is installed and accessible.")
+    if not binary_path or not os.path.exists(binary_path):
+        raise FileNotFoundError(f"Ollama binary not found at {binary_path}. Please ensure Ollama is installed and accessible.")
 
-    logging.info(f"Attempting to start Ollama from system path: {binary_path}")
+    logging.info(f"Attempting to start Ollama from path: {binary_path}")
 
     global ollama_process
     if not is_ollama_running():

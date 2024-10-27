@@ -4,7 +4,24 @@ import sys
 import uvicorn
 import argparse
 import logging
+import socket
 from app.ollama_path_fix import ensure_binary_exists
+
+def is_port_available(port: int) -> bool:
+    """Check if a port is available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('127.0.0.1', port))
+            return True
+        except socket.error:
+            return False
+
+def find_available_port(start_port: int, max_attempts: int = 100) -> int:
+    """Find the next available port starting from start_port."""
+    for port in range(start_port, start_port + max_attempts):
+        if is_port_available(port):
+            return port
+    raise RuntimeError(f"No available ports found between {start_port} and {start_port + max_attempts}")
 
 def main():
     # Configure logging
@@ -15,28 +32,39 @@ def main():
 
     # Parse arguments
     parser = argparse.ArgumentParser(description="Start the FastAPI server with dynamic ports.")
-    parser.add_argument('--ollama-port', type=int, default=11434, help='Port for Ollama')
+    parser.add_argument('--ollama-port', type=int, default=11434, help='Starting port for Ollama')
     parser.add_argument('--server-port', type=int, default=8001, help='Starting port for FastAPI server')
-    parser.add_argument('--prod', action='store_true', help='Run in production mode')  # Changed to simple flag
-    args = parser.parse_args()
+    # parser.add_argument('--prod', action='store_true', default=False, help='Run in production mode')
 
-    logging.info(f'Parsed arguments: {args}')
-    logging.info(f'Server is in production mode: {args.prod}')
 
     try:
+        args = parser.parse_args()
+        logging.info(f'Initial arguments: {args}')
+        # logging.info(f'Server is in production mode: {}')
+
+        # Find available ports
+        ollama_port = find_available_port(args.ollama_port)
+        if ollama_port != args.ollama_port:
+            logging.warning(f"Default Ollama port {args.ollama_port} was taken, using port {ollama_port} instead")
+
+        server_port = find_available_port(args.server_port)
+        if server_port != args.server_port:
+            logging.warning(f"Default server port {args.server_port} was taken, using port {server_port} instead")
+
         # Get the appropriate Ollama binary path
-        binary_path = ensure_binary_exists(isProd=args.prod)
+        binary_path = ensure_binary_exists()
         logging.info(f"Using Ollama binary at: {binary_path}")
 
         # Set environment variables
         os.environ['OLLAMA_PATH'] = binary_path
-        os.environ['OLLAMA_PORT'] = str(args.ollama_port)
+        os.environ['OLLAMA_PORT'] = str(ollama_port)
 
         # Import app only after environment is setup
         from app.main import app
 
         # Start server
-        uvicorn.run(app, host="127.0.0.1", port=args.server_port)
+        logging.info(f"Starting server on port {server_port}")
+        uvicorn.run(app, host="127.0.0.1", port=server_port)
 
     except Exception as e:
         logging.error(f"Failed to start server: {e}")

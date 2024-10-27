@@ -158,10 +158,10 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
     '--ollama-port', OLLAMA_PORT.toString()
   ];
 
-  // Only add --prod flag if app is packaged
-  if (app.isPackaged) {
-    args.push('--prod');
-  }
+  // // Only add --prod flag if app is packaged
+  // if (app.isPackaged) {
+  //   args.push('--prod');
+  // }
 
   console.log('Starting server with args:', args);
 
