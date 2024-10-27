@@ -37,11 +37,11 @@ module.exports = {
         },
         {
           from: path.resolve(__dirname, '../backend/dist/server'),
-          to: path.resolve(__dirname, '../frontend/.webpack/main/backend/server')
+          to: path.resolve(__dirname, '../frontend/.webpack/main/Resources/server')
         },
         {
           from: path.resolve(__dirname, '../backend/app/ollama'),
-          to: path.resolve(__dirname, '../frontend/.webpack/main/backend/server/ollama')
+          to: path.resolve(__dirname, '../frontend/.webpack/main/Resources/ollama')
         }
       ]
     }),
@@ -49,8 +49,8 @@ module.exports = {
     new WebpackShellPluginNext({
       onBuildEnd: {
         scripts: [
-          'chmod +x ../frontend/.webpack/main/backend/server/ollama/ollama',
-          'chmod +x ../frontend/.webpack/main/backend/server/server',
+          'chmod +x ../frontend/.webpack/main/Resources/ollama/ollama',
+          'chmod +x ../frontend/.webpack/main/Resources/server/server',
         ],
         blocking: false,
         parallel: true

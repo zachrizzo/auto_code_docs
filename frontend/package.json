@@ -7,7 +7,7 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
-    "make": "electron-forge make",
+    "make": "npm run bundle:backend && electron-forge make",
     "make:all": "NODE_ENV=production electron-forge make --platform=linux,darwin,win32",
     "make:windows": "NODE_ENV=production electron-forge make --platform=win32",
     "make:linux": "NODE_ENV=production electron-forge make --platform=linux",

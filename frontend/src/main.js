@@ -46,7 +46,7 @@ let mainWindow = null;
 const getServerExecutablePath = () => {
   if (!app.isPackaged) {
     // In development, use the local path
-    return path.join(__dirname, 'backend/server/server');
+    return path.join(__dirname, 'Resources/server/server');
   } else {
     // In production, adjust the path
     // __dirname points to the resources/app directory when packaged
@@ -129,7 +129,6 @@ const createMainWindow = () => {
   });
 };
 
-// Function to start the server executable
 const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
   console.log('Starting server executable...');
   const logPath = path.join(app.getPath('logs'), 'app.log');
@@ -141,7 +140,7 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
     fs.appendFileSync(logPath, logMessage);
   }
 
-  // Use it like this:
+  // Log initial messages
   log('Application started');
   log(`Server path: ${SERVER_EXECUTABLE_PATH}`);
 
@@ -150,17 +149,28 @@ const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
     const errorMsg = `Server executable not found at ${SERVER_EXECUTABLE_PATH}`;
     log(errorMsg);
     dialog.showErrorBox('Server Start Error', errorMsg);
-    // Instead of quitting, allow the developer to choose to proceed without the executable
-    // Optionally, you can prompt the developer here
     return;
   }
 
-  // Ensure the server executable has execute permissions (only necessary on Unix-like systems)
+  // Build the arguments array
+  const args = [
+    '--server-port', SERVER_PORT.toString(),
+    '--ollama-port', OLLAMA_PORT.toString()
+  ];
+
+  // Only add --prod flag if app is packaged
+  if (app.isPackaged) {
+    args.push('--prod');
+  }
+
+  console.log('Starting server with args:', args);
+
+  // Ensure the server executable has execute permissions
   fsPromises.access(SERVER_EXECUTABLE_PATH, fs.constants.X_OK)
     .then(() => {
       serverProcess = spawn(
         SERVER_EXECUTABLE_PATH,
-        ['--server-port', SERVER_PORT.toString(), '--ollama-port', OLLAMA_PORT.toString()],
+        args,
         {
           cwd: path.dirname(SERVER_EXECUTABLE_PATH),
           env: {

@@ -13,13 +13,14 @@ module.exports = {
     ],
     executableName: "fractal-x",
     icon: "./dist/images/fractal-X-logo.png",
-    // Fix: Change extraResource to use string paths instead of objects
+    // Fix: Change to simple string array
     extraResource: [
-      '../backend/ollama',
-      '../backend/dist/server'
+      // Convert paths to strings and ensure they point to directories
+      path.resolve(__dirname, '..', 'backend', 'ollama'),
+      path.resolve(__dirname, '..', 'backend', 'dist', 'server')
     ],
     osxSign: {
-      identity: 'Developer ID Application: Zach Rizzo (PY886R2W36)',
+      identity: process.env.APPLE_DEVELOPER_ID,
       hardenedRuntime: true,
       'gatekeeper-assess': false,
       entitlements: 'entitlements.mac.plist',

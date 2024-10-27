@@ -1,15 +1,13 @@
-# server.spec
 block_cipher = None
 
 a = Analysis(
     ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[],  # Remove ollama binary inclusion
     hiddenimports=[],
     hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['set_permissions.py'],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

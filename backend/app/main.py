@@ -52,9 +52,21 @@ BASE_DIR = get_base_dir()
 # Set the default Ollama port (Assuming 11434 is the default. Change if different)
 DEFAULT_OLLAMA_PORT = 11434
 
-OLLAMA_BINARY_PATH = "./ollama/ollama"
-OLLAMA_DATA_DIR = "./ollama"
-OLLAMA_MODELS_DIR = "./ollama/models"
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if getattr(sys, 'frozen', False):
+        # If the application is run as a bundle
+        base_path = sys._MEIPASS
+    else:
+        # If the application is run from a Python interpreter
+        base_path = os.path.dirname(os.path.abspath(__file__))
+
+    return os.path.join(base_path, relative_path)
+
+# Update the paths using the new function
+OLLAMA_BINARY_PATH =  shutil.which("ollama")
+OLLAMA_DATA_DIR = get_resource_path("ollama")
+OLLAMA_MODELS_DIR = get_resource_path("ollama/models")
 
 # Ensure the models directory exists
 os.makedirs(OLLAMA_MODELS_DIR, exist_ok=True)
@@ -103,38 +115,39 @@ def is_ollama_running():
 
 def start_ollama():
     """Start the Ollama server as a subprocess."""
-    logging.info(f"Attempting to start Ollama from: {OLLAMA_BINARY_PATH}")
+    # Use shutil.which to find Ollama in the system PATH
+    binary_path = OLLAMA_BINARY_PATH
+    if not binary_path:
+        raise FileNotFoundError("Ollama binary not found in system PATH. Please ensure Ollama is installed and accessible.")
 
-    print("Starting Ollama...", OLLAMA_BINARY_PATH)
+    logging.info(f"Attempting to start Ollama from system path: {binary_path}")
+
     global ollama_process
     if not is_ollama_running():
         try:
             env = os.environ.copy()
-            env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR  # Ensure models directory is set
-            env['OLLAMA_PORT'] = str(OLLAMA_PORT)     # Set Ollama port in environment
-
-            if not os.path.exists(OLLAMA_BINARY_PATH):
-                raise FileNotFoundError(f"Ollama binary not found at {OLLAMA_BINARY_PATH}")
+            env['OLLAMA_MODELS'] = OLLAMA_MODELS_DIR
+            env['OLLAMA_PORT'] = str(OLLAMA_PORT)
 
             ollama_process = subprocess.Popen(
-                [OLLAMA_BINARY_PATH, "serve"],
+                [binary_path, "serve"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env
             )
             logging.info(f"Ollama started with PID {ollama_process.pid}")
+
             # Wait for Ollama to be ready
-            timeout = 20  # Increased timeout to 20 seconds
+            timeout = 20
             start_time = time.time()
             while time.time() - start_time < timeout:
-                if is_port_in_use(OLLAMA_PORT):  # Changed condition
+                if is_port_in_use(OLLAMA_PORT):
                     logging.info("Ollama is up and running.")
                     return
                 time.sleep(0.5)
             raise Exception("Ollama did not start within the expected time.")
         except Exception as e:
             logging.error(f"Failed to start Ollama: {e}")
-            # Capture and log subprocess output for debugging
             if ollama_process:
                 try:
                     stdout, stderr = ollama_process.communicate(timeout=5)
