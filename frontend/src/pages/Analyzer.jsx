@@ -110,6 +110,31 @@ const Analyzer = () => {
         };
     }, []);
 
+
+    // Update the useEffect that loads saved data
+    useEffect(() => {
+        const loadSavedData = async () => {
+            try {
+                // Load saved directory
+                const savedDir = await window.electronAPI.getSavedDirectory();
+                if (savedDir) {
+                    setWatchingDir(savedDir);
+                }
+
+                // Load saved analysis results
+                const savedResults = await window.electronAPI.getSavedAnalysis();
+                if (savedResults) {
+                    setResults(savedResults);
+                }
+            } catch (error) {
+                console.error('Error loading saved data:', error);
+            }
+        };
+
+        loadSavedData();
+    }, []);
+
+
     const handleAnalyze = useCallback(async () => {
         if (!watchingDir) {
             alert('Please select a directory to analyze.');
@@ -124,10 +149,13 @@ const Analyzer = () => {
             const parsedAnalysisResults = JSON.parse(analysisResults);
             const parsedGraphData = JSON.parse(graphData);
 
-            console.log('New Analysis Results:', parsedAnalysisResults);
-            console.log('New Graph Data:', parsedGraphData);
-
             setResults(parsedGraphData);
+
+            console.log('Analysis Results:', parsedAnalysisResults);
+            console.log('Graph Data:', parsedGraphData);
+
+            // Save the analysis results
+            await window.electronAPI.saveAnalysis(parsedGraphData);
         } catch (error) {
             console.error('Renderer: Error during analysis:', error);
             alert('An error occurred during analysis. Please check the console for details.');
@@ -359,9 +387,12 @@ const Analyzer = () => {
      * Handles directory selection dialog confirmation.
      */
     const handleSelectDirectory = async () => {
-        const selectedDir = await ipcRenderer.invoke('select-directory');
+        const selectedDir = await window.electronAPI.selectDirectory();
+
         if (selectedDir) {
             setWatchingDir(selectedDir);
+            // Save the selected directory
+            await window.electronAPI.saveDirectory(selectedDir);
             clear();
             setIsDirectoryDialogOpen(false);
         }
@@ -661,8 +692,10 @@ const Analyzer = () => {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 position: 'relative',
+                                overflow: 'hidden', // Prevent outer paper from scrolling
                             }}
                         >
+                            {/* Header - Fixed height */}
                             <Box
                                 sx={{
                                     display: 'flex',
@@ -671,91 +704,149 @@ const Analyzer = () => {
                                     p: 2,
                                     borderBottom: '1px solid',
                                     borderColor: 'divider',
+                                    flexShrink: 0, // Prevent header from shrinking
                                 }}
                             >
-                                <Typography variant="h6">  {selectedNode?.label.substring(0, 10)}</Typography>
+                                <Typography variant="h6">{selectedNode?.label.substring(0, 10)}</Typography>
                                 <IconButton onClick={() => setIsDrawerOpen(false)}>
                                     <CloseIcon />
                                 </IconButton>
                             </Box>
-                            <Tabs value={activeTab} onChange={handleTabChange} centered>
-                                <Tab icon={<DescriptionIcon />} label="Description" />
-                                <Tab icon={<CodeIcon />} label="Code" />
-                                <Tab icon={<BugReportIcon />} label="Unit Test" />
-                            </Tabs>
-                            <Box sx={{ p: 2, flexGrow: 1, overflowY: 'auto' }}>
-                                {activeTab === 0 && (
-                                    <ReactMarkdown>
-                                        {aiDescriptions[selectedNode?.id] || 'Loading description...'}
-                                    </ReactMarkdown>
-                                )}
-                                {activeTab === 1 && (
-                                    <>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+
+                            {/* Tabs - Fixed height */}
+                            <Box sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+                                <Tabs value={activeTab} onChange={handleTabChange} centered>
+                                    <Tab icon={<DescriptionIcon />} label="Description" />
+                                    <Tab icon={<CodeIcon />} label="Code" />
+                                    <Tab icon={<BugReportIcon />} label="Unit Test" />
+                                </Tabs>
+                            </Box>
+
+                            {/* Content area - Scrollable */}
+                            <Box
+                                sx={{
+                                    flexGrow: 1,
+                                    overflow: 'hidden', // Hide overflow at container level
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                }}
+                            >
+                                {/* Tab panels with individual scroll areas */}
+                                <Box
+                                    sx={{
+                                        p: 2,
+                                        flexGrow: 1,
+                                        overflowY: 'auto', // Enable vertical scrolling
+                                        height: '100%', // Take full remaining height
+                                    }}
+                                >
+                                    {/* Description Tab */}
+                                    {activeTab === 0 && (
+                                        <Box sx={{ minHeight: '100%' }}>
+                                            <ReactMarkdown>
+                                                {aiDescriptions[selectedNode?.id] || 'Loading description...'}
+                                            </ReactMarkdown>
+                                        </Box>
+                                    )}
+
+                                    {/* Code Tab */}
+                                    {activeTab === 1 && (
+                                        <Box sx={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            height: '100%',
+                                        }}>
+                                            <Box sx={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                mb: 2,
+                                                flexShrink: 0
+                                            }}>
+                                                <Button
+                                                    variant="contained"
+                                                    color="primary"
+                                                    onClick={handleSave}
+                                                    startIcon={<SaveIcon />}
+                                                >
+                                                    Save
+                                                </Button>
+                                                <Button
+                                                    variant="outlined"
+                                                    color="primary"
+                                                    onClick={() => {
+                                                        setIsCodeExpanded(!isCodeExpanded);
+                                                        setEditedCode(isCodeExpanded ? codeSnippet : fileCode);
+                                                    }}
+                                                >
+                                                    {isCodeExpanded ? 'Show Snippet' : 'Expand Code'}
+                                                </Button>
+                                            </Box>
+                                            <Box sx={{
+                                                flexGrow: 1,
+                                                minHeight: 0, // This is crucial for nested flex containers
+                                                position: 'relative' // Establish positioning context
+                                            }}>
+                                                {editedCode && (
+                                                    <ErrorBoundary fallback={<div>Error loading code editor</div>}>
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: 0,
+                                                            left: 0,
+                                                            right: 0,
+                                                            bottom: 0,
+                                                            overflow: 'auto'
+                                                        }}>
+                                                            <CodeMirror
+                                                                value={editedCode}
+                                                                height="100%"
+                                                                width="100%"
+                                                                extensions={[javascript(), oneDark]}
+                                                                onChange={(value, viewUpdate) => {
+                                                                    setEditedCode(value);
+                                                                }}
+                                                                theme={oneDark}
+                                                                style={{ height: '100%' }}
+                                                            />
+                                                        </div>
+                                                    </ErrorBoundary>
+                                                )}
+                                            </Box>
+                                        </Box>
+                                    )}
+
+                                    {/* Unit Test Tab */}
+                                    {activeTab === 2 && (
+                                        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                                             <Button
                                                 variant="contained"
                                                 color="primary"
-                                                onClick={handleSave}
-                                                startIcon={<SaveIcon />}
+                                                onClick={handleGenerateUnitTest}
+                                                startIcon={<BugReportIcon />}
+                                                sx={{ mb: 2, flexShrink: 0 }}
                                             >
-                                                Save
+                                                Generate Unit Test
                                             </Button>
-                                            <Button
-                                                variant="outlined"
-                                                color="primary"
-                                                onClick={() => {
-                                                    setIsCodeExpanded(!isCodeExpanded);
-                                                    setEditedCode(isCodeExpanded ? codeSnippet : fileCode);
-                                                }}
-                                            >
-                                                {isCodeExpanded ? 'Show Snippet' : 'Expand Code'}
-                                            </Button>
-                                        </Box>
-                                        {/* <Typography variant="caption" display="block" gutterBottom>
-                                            {`Editing ${isCodeExpanded ? 'full file' : 'function or class'} "${selectedNode?.label.t}".`}
-                                        </Typography> */}
-                                        <Box sx={{ height: 300, mb: 2 }}>
-                                            {editedCode && (
-                                                <ErrorBoundary fallback={<div>Error loading code editor</div>}>
-                                                    <CodeMirror
-
-                                                        value={editedCode}
-                                                        height="100%"
-                                                        extensions={[javascript(), oneDark]}
-                                                        onChange={(value, viewUpdate) => {
-                                                            setEditedCode(value);
-                                                        }}
-                                                        theme={oneDark}
-                                                    />
-                                                </ErrorBoundary>
+                                            {unitTest && (
+                                                <Paper
+                                                    sx={{
+                                                        p: 2,
+                                                        backgroundColor: theme.palette.grey[100],
+                                                        flexGrow: 1,
+                                                        overflow: 'auto'
+                                                    }}
+                                                >
+                                                    <Typography
+                                                        variant="body2"
+                                                        component="pre"
+                                                        sx={{ whiteSpace: 'pre-wrap' }}
+                                                    >
+                                                        {unitTest}
+                                                    </Typography>
+                                                </Paper>
                                             )}
                                         </Box>
-                                    </>
-                                )}
-                                {activeTab === 2 && (
-                                    <>
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            onClick={handleGenerateUnitTest}
-                                            startIcon={<BugReportIcon />}
-                                            sx={{ mb: 2 }}
-                                        >
-                                            Generate Unit Test
-                                        </Button>
-                                        {unitTest && (
-                                            <Paper sx={{ p: 2, backgroundColor: theme.palette.grey[100], mb: 2 }}>
-                                                <Typography
-                                                    variant="body2"
-                                                    component="pre"
-                                                    sx={{ whiteSpace: 'pre-wrap' }}
-                                                >
-                                                    {unitTest}
-                                                </Typography>
-                                            </Paper>
-                                        )}
-                                    </>
-                                )}
+                                    )}
+                                </Box>
                             </Box>
                         </Paper>
                     </ResizableBox>

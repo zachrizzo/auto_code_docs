@@ -73,7 +73,7 @@ def main():
 
     except Exception as e:
         logging.error(f"Failed to start server: {e}")
-        sys.exit(1)
+        # sys.exit(1)
 
 if __name__ == "__main__":
     main()

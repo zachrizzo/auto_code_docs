@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     selectDirectory: () => ipcRenderer.invoke('select-directory'),
     getFileContent: (filePath) => ipcRenderer.invoke('get-file-content', filePath),
     saveFile: ({ filePath, content }) => ipcRenderer.invoke('save-file', { filePath, content }),
+    saveDirectory: (directory) => ipcRenderer.invoke('save-directory', directory),
+    getSavedDirectory: () => ipcRenderer.invoke('get-saved-directory'),
+    saveAnalysis: (results) => ipcRenderer.invoke('save-analysis', results),
+    getSavedAnalysis: () => ipcRenderer.invoke('get-saved-analysis'),
 
     // Listen to Service Accounts Changes
     onServiceAccountsChanged: (callback) => ipcRenderer.on('configs-changed', callback),

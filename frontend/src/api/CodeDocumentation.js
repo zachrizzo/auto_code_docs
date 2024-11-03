@@ -119,9 +119,6 @@ export async function checkMissingAiModels(models) {
 }
 
 
-
-
-
 export async function compareFirestoreDocs(collectionName, selectedServiceAccount) {
     const response = await fetch(`http://127.0.0.1:${PORT}/compare-documents`, {
         method: 'POST',
@@ -141,4 +138,37 @@ export async function compareFirestoreDocs(collectionName, selectedServiceAccoun
     const data = await response.json();
 
     return data;
+}
+
+
+export async function initializeVectorStore(graphData) {
+    const response = await fetch(`http://127.0.0.1:${PORT}/initialize-vectorstore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ graph_data: JSON.stringify(graphData) }), // Send as JSON string
+    });
+
+    if (response.ok) {
+        const data = await response.json();
+        return data.message;
+    } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to initialize vector store');
+    }
+}
+
+export async function searchCode(query, topK = 5) {
+    const response = await fetch(`http://127.0.0.1:${PORT}/search-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, top_k: topK }),
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to search code');
+    }
+
+    const data = await response.json();
+    return data.results;
 }

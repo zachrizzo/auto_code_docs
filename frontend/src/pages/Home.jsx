@@ -24,7 +24,7 @@ function Home() {
     const [messages, setMessages] = useState([]);
     const [isCompleted, setIsCompleted] = useState(false);
     const [warningOpen, setWarningOpen] = useState(false);
-    const [requiredModels] = useState(['llama3:8b']); // Define required models
+    const [requiredModels] = useState(['llama3.2:1b']); // Define required models
 
     const routeToAnalyzer = () => {
         navigate('/analyze');

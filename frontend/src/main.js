@@ -17,7 +17,7 @@ dotenv.config();
 
 // **Updated: Read the USE_SERVER_EXECUTABLE flag from .env (case-insensitive)**
 // const USE_SERVER_EXECUTABLE = (process.env.USE_SERVER_EXECUTABLE || '').toLowerCase() === 'true';
-const USE_SERVER_EXECUTABLE = true;
+const USE_SERVER_EXECUTABLE = false;
 
 console.log(`USE_SERVER_EXECUTABLE is set to: ${USE_SERVER_EXECUTABLE}`);
 
@@ -35,8 +35,75 @@ const findAvailablePort = async (defaultPort) => {
 };
 
 let serverProcess = null;
-let allowedBaseDir = null;
 const squirrelStartup = false;
+
+const initializeStore = () => {
+  const schema = {
+    firebaseConfigs: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          projectId: { type: 'string' },
+          apiKey: { type: 'string' },
+          authDomain: { type: 'string' },
+        }
+      }
+    },
+    selectedDirectory: {
+      type: ['string', 'null']
+    },
+    analysisResults: {
+      type: ['object', 'null'],
+      properties: {
+        nodes: {
+          type: 'array',
+          default: []
+        },
+        edges: {
+          type: 'array',
+          default: []
+        }
+      },
+      default: { nodes: [], edges: [] }
+    },
+    serviceAccounts: {
+      type: 'array',
+      default: []
+    },
+    pastCollections: {
+      type: 'array',
+      default: []
+    }
+  };
+
+  return new Store({
+    name: 'FirebaseConfigManager',
+    schema,
+    encryptionKey: process.env.ELECTRON_STORE_ENCRYPTION_KEY || 'default_encryption_key',
+    defaults: {
+      serviceAccounts: [],
+      pastCollections: [],
+      selectedDirectory: null,
+      analysisResults: { nodes: [], edges: [] }
+    }
+  });
+};
+
+// Initialize store at the top level
+const store = initializeStore();
+
+
+
+// Load the saved directory path (if any)
+let allowedBaseDir = store.get('selectedDirectory', null);
+
+// Function to set the allowed base directory
+const setAllowedBaseDir = (dirPath) => {
+  allowedBaseDir = dirPath;
+  // Save the directory path to electron-store
+  store.set('selectedDirectory', allowedBaseDir);
+};
 
 // References to windows
 let splashWindow = null;
@@ -127,6 +194,51 @@ const createMainWindow = () => {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+};
+
+const initializeVectorStore = async (graphData) => {
+  const SERVER_PORT = global.SERVER_PORT || 8001;
+  const SERVER_URL = `http://127.0.0.1:${SERVER_PORT}`;
+
+  try {
+    // Send the graph data as is - no need to transform it
+    const response = await fetch(`${SERVER_URL}/initialize-vectorstore`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        graph_data: graphData
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
+
+    const data = await response.json();
+    return data.message;
+  } catch (error) {
+    console.error('Error initializing vector store:', error);
+    throw error;
+  }
+};
+
+// Usage example with error handling
+const handleVectorStoreInit = async (graphData) => {
+  try {
+    console.log('Starting vector store initialization...');
+    const result = await initializeVectorStore(graphData);
+    console.log('Vector store initialization successful:', result);
+    return result;
+  } catch (error) {
+    console.error('Vector store initialization failed:', {
+      message: error.message,
+      stack: error.stack
+    });
+    throw error; // Rethrow to handle it at a higher level if needed
+  }
 };
 
 const startServerExecutable = (SERVER_PORT, OLLAMA_PORT) => {
@@ -353,17 +465,26 @@ const registerIpcHandlers = () => {
   ipcMain.handle('analyze-directory', async (event, watchingDir, includeAnonymousFunctions, maxNodes, maxEdges, nodeDependencyDirection) => {
     console.log('Main: analyze-directory invoked', { watchingDir });
     try {
+      // Analyze the directory to get graph data
       const results = await analyzeDirectory(watchingDir, includeAnonymousFunctions);
       const elkResults = await transformToReactFlowData(results, maxNodes, maxEdges, nodeDependencyDirection);
 
-      allowedBaseDir = watchingDir; // Update allowedBaseDir
+      setAllowedBaseDir(watchingDir);
 
       const serializedResults = JSON.stringify(results);
       const serializedElkResults = JSON.stringify(elkResults);
 
+      console.log('Analysis results:', serializedResults);
+      console.log('ELK results:', serializedElkResults);
+
+
+      // Initialize vector store with graph data
+      const initializeResponse = await handleVectorStoreInit(serializedResults); // Function to call backend API
+
       return {
         analysisResults: serializedResults,
-        graphData: serializedElkResults
+        graphData: serializedElkResults,
+        vectorStoreInit: initializeResponse
       };
     } catch (error) {
       console.error('Error in analyze-directory handler:', error);
@@ -426,59 +547,55 @@ const registerIpcHandlers = () => {
       return { success: false, error: error.message };
     }
   });
-};
 
-// Initialize electron-store with schema and encryption (optional)
-const initializeStore = () => {
-  const schema = {
-    firebaseConfigs: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: true,
-        properties: {
-          projectId: { type: 'string' },
-          apiKey: { type: 'string' },
-          authDomain: { type: 'string' },
-        },
-      },
-    },
-  };
-
-  let storeInstance;
-  try {
-    const encryptionKey = process.env.ELECTRON_STORE_ENCRYPTION_KEY || 'default_encryption_key';
-    if (!encryptionKey) {
-      throw new Error('Missing ELECTRON_STORE_ENCRYPTION_KEY');
+  ipcMain.handle('save-directory', async (event, directory) => {
+    try {
+      store.set('selectedDirectory', directory);
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving directory:', error);
+      return { success: false, error: error.message };
     }
+  });
 
-    storeInstance = new Store({
-      name: 'FirebaseConfigManager',
-      schema,
-      encryptionKey,
-      defaults: {
-        serviceAccounts: [],
-        pastCollections: [],
-      },
-    });
-    console.log('Store initialized successfully');
-  } catch (error) {
-    console.error('Error initializing store:', error);
-    // Optionally, reinitialize store without encryption or alert the user
-    storeInstance = new Store({
-      name: 'FirebaseConfigManager',
-      schema,
-      // Remove encryptionKey or set a default one (not recommended for sensitive data)
-      defaults: {
-        serviceAccounts: [],
-        pastCollections: [],
-      },
-    });
-  }
-  return storeInstance;
+  // Handler to get saved directory
+  ipcMain.handle('get-saved-directory', async () => {
+    try {
+      return store.get('selectedDirectory');
+    } catch (error) {
+      console.error('Error getting saved directory:', error);
+      return null;
+    }
+  });
+
+  // Handler to save analysis results
+  ipcMain.handle('save-analysis', async (event, results) => {
+    try {
+      // Ensure results match the expected schema
+      const formattedResults = {
+        nodes: results.nodes || [],
+        edges: results.edges || []
+      };
+      store.set('analysisResults', formattedResults);
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving analysis results:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handler to get saved analysis results
+  ipcMain.handle('get-saved-analysis', async () => {
+    try {
+      const results = store.get('analysisResults');
+      return results || { nodes: [], edges: [] };
+    } catch (error) {
+      console.error('Error getting saved analysis results:', error);
+      return { nodes: [], edges: [] };
+    }
+  });
 };
 
-const store = initializeStore();
 
 // App ready event
 app.whenReady().then(async () => {

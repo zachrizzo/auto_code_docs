@@ -24,6 +24,8 @@ import Login from './pages/LoginPage.jsx';
 import { auth } from './firebase/firebase.js';
 import Home from './pages/Home.jsx';
 import DatabaseManagementPage from './pages/Database.jsx';
+import ChatBubble from './components/aiChat/ChatBubble.jsx';
+
 
 
 const lightThemeColors = {
@@ -344,6 +346,8 @@ function App() {
                     <Route path="signup" element={<SignUp />} />
                 </Routes>
             </HashRouter>
+            <ChatBubble />
+
         </ThemeProvider>
     );
 }

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     OLLAMA_BINARY_PATH: str = os.getenv('OLLAMA_PATH', '')
     OLLAMA_DATA_DIR: str = ''
     OLLAMA_MODELS_DIR: str = ''
-    OLLAMA_MODELS: list = ['llama3:8b']
+    OLLAMA_MODELS: list = ['llama3.2:1b']
 
     class Config:
         env_file = '.env'

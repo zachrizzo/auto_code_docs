@@ -24,15 +24,18 @@
       "timeout": 30000,
       "urlFilter": "app://*",
       "restart": true
+    },
+    {
+      "name": "Python: Debug FastAPI Server",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/server.py", // Update this path
+      "args": ["--ollama-port", "11434", "--server-port", "8001"],
+      "console": "integratedTerminal",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
     }
-    // {
-    //   "name": "Backend: Python",
-    //   "type": "debugpy",
-    //   "request": "launch",
-    //   "program": "${workspaceFolder}/../backend/server.py",
-    //   "cwd": "${workspaceFolder}/../backend",
-    //   "console": "integratedTerminal"
-    // }
   ],
   "compounds": [
     {

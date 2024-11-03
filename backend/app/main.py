@@ -16,6 +16,10 @@ from app.routers import (
 )
 from app.ollama.ollama_utils import start_ollama, terminate_ollama
 
+from app.routers import vector_search
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
@@ -48,4 +52,5 @@ app.include_router(generate_unit_test.router)
 app.include_router(get_embeddings.router)
 app.include_router(compare_documents.router)
 app.include_router(check_models.router)
+app.include_router(vector_search.router)
 app.include_router(root.router)
